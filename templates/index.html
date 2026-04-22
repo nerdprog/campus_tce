@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCE Campus Navigator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        :root {
+            --surface: rgba(255, 250, 242, 0.88);
+            --surface-strong: rgba(255, 255, 255, 0.96);
+            --ink: #1f2937;
+            --muted: #5b6473;
+            --accent: #e85d04;
+            --line: rgba(31, 41, 55, 0.1);
+            --shadow: 0 22px 50px rgba(72, 44, 19, 0.14);
+            --route-a: #16a34a;
+            --route-b: #f97316;
+            --route-c: #dc2626;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--ink);
+            overflow: hidden;
+            background:
+                radial-gradient(circle at top left, rgba(232, 93, 4, 0.16), transparent 24%),
+                radial-gradient(circle at bottom right, rgba(37, 99, 235, 0.12), transparent 26%),
+                linear-gradient(180deg, #fff9ef 0%, #f5ecde 54%, #f0e4d2 100%);
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.35) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.35) 1px, transparent 1px);
+            background-size: 42px 42px;
+            opacity: 0.22;
+        }
+
+        .app-shell {
+            position: relative;
+            z-index: 1;
+            width: min(1400px, calc(100% - 24px));
+            margin: 12px auto;
+            display: grid;
+            grid-template-columns: minmax(320px, 410px) minmax(0, 1fr);
+            gap: 18px;
+        }
+
+        .panel,
+        .map-panel {
+            background: var(--surface);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+            border-radius: 30px;
+        }
+
+        .panel {
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-height: calc(100vh - 24px);
+            max-height: calc(100vh - 24px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,246,236,0.92)),
+                radial-gradient(circle at top right, rgba(249, 115, 22, 0.12), transparent 32%);
+        }
+
+        .panel::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .panel::-webkit-scrollbar-thumb {
+            background: rgba(194, 65, 12, 0.28);
+            border-radius: 999px;
+            border: 2px solid rgba(255,255,255,0.7);
+        }
+
+        .brand-card {
+            border-radius: 28px;
+            padding: 24px;
+            background:
+                radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 28%),
+                linear-gradient(145deg, #102542 0%, #244c6a 46%, #f97316 130%);
+            color: #fffdf8;
+            position: relative;
+            overflow: hidden;
+            min-height: 220px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .brand-card::after {
+            content: "";
+            position: absolute;
+            inset: auto -24px -38px auto;
+            width: 170px;
+            height: 170px;
+            background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 68%);
+        }
+
+        .brand-card::before {
+            content: "";
+            position: absolute;
+            inset: 18px 18px auto auto;
+            width: 72px;
+            height: 72px;
+            border-radius: 24px;
+            background: rgba(255,255,255,0.08);
+            transform: rotate(14deg);
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: rgba(255,255,255,0.78);
+        }
+
+        h1, h2, h3 { margin: 0; font-family: 'Sora', sans-serif; }
+
+        .brand-card p {
+            margin: 14px 0 0;
+            max-width: 28ch;
+            color: rgba(255,255,255,0.84);
+            line-height: 1.6;
+            font-size: 1.02rem;
+        }
+
+        .card {
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,244,238,0.96));
+            border: 1px solid rgba(191, 124, 69, 0.14);
+            border-radius: 24px;
+            padding: 18px;
+            box-shadow: 0 18px 30px rgba(101, 67, 33, 0.08);
+        }
+
+        .hidden { display: none !important; }
+
+        .field-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 14px;
+            align-items: end;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .field label {
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .field select {
+            width: 100%;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            border-radius: 18px;
+            padding: 15px 16px;
+            font: inherit;
+            background: linear-gradient(180deg, #ffffff, #fff9f2);
+            color: var(--ink);
+            outline: none;
+        }
+
+        .field select:focus,
+        .icon-btn:focus,
+        .primary-btn:focus,
+        .secondary-btn:focus,
+        .route-option:focus {
+            border-color: rgba(232, 93, 4, 0.45);
+            box-shadow: 0 0 0 4px rgba(232, 93, 4, 0.12);
+        }
+
+        .icon-btn,
+        .primary-btn,
+        .secondary-btn {
+            border: none;
+            cursor: pointer;
+            font: inherit;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .icon-btn {
+            width: 52px;
+            height: 52px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #fff7ed, #f3f4f6);
+            color: #9a3412;
+            align-self: center;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
+        }
+
+        .primary-btn,
+        .secondary-btn {
+            width: 100%;
+            padding: 16px 18px;
+            border-radius: 18px;
+            font-weight: 700;
+        }
+
+        .primary-btn {
+            margin-top: 14px;
+            color: white;
+            background: linear-gradient(135deg, #f97316, #d9480f);
+            box-shadow: 0 18px 28px rgba(217, 72, 15, 0.28);
+        }
+
+        .secondary-btn {
+            color: #334155;
+            background: linear-gradient(135deg, #f8fafc, #e5e7eb);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+        }
+
+        .route-stack,
+        .steps-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .section-head {
+            display: flex;
+            align-items: start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .section-head p {
+            margin: 6px 0 0;
+            color: var(--muted);
+        }
+
+        .route-option {
+            width: 100%;
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            background: linear-gradient(180deg, #ffffff, #fffaf5);
+            border-radius: 20px;
+            padding: 16px;
+            cursor: pointer;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            box-shadow: 0 10px 18px rgba(148, 163, 184, 0.08);
+        }
+
+        .route-option.active {
+            border-color: rgba(232, 93, 4, 0.4);
+            box-shadow: 0 14px 28px rgba(232, 93, 4, 0.12);
+        }
+
+        .route-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .route-swatch {
+            width: 14px;
+            height: 14px;
+            border-radius: 999px;
+            flex-shrink: 0;
+            box-shadow: 0 0 0 4px rgba(255,255,255,0.9);
+        }
+
+        .route-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .route-subtitle,
+        .muted {
+            color: var(--muted);
+            font-size: 0.94rem;
+        }
+
+        .badge-chip {
+            border-radius: 999px;
+            padding: 8px 10px;
+            background: rgba(31, 41, 55, 0.06);
+            font-size: 0.82rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat-tile {
+            border-radius: 20px;
+            padding: 15px;
+            background: linear-gradient(145deg, #fff8f1, #f8fafc);
+            border: 1px solid rgba(191, 124, 69, 0.16);
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 0.74rem;
+            text-transform: uppercase;
+            letter-spacing: 0.13em;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-family: 'Sora', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .step {
+            display: grid;
+            grid-template-columns: 46px 1fr;
+            gap: 14px;
+            align-items: start;
+            background: linear-gradient(180deg, #ffffff, #fff9f3);
+            border-radius: 22px;
+            border: 1px solid rgba(191, 124, 69, 0.14);
+            padding: 16px;
+            box-shadow: 0 14px 22px rgba(148, 163, 184, 0.08);
+        }
+
+        .step-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.18), rgba(255,255,255,0.95));
+            color: var(--accent);
+        }
+
+        .step small {
+            display: block;
+            color: var(--muted);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 0.68rem;
+        }
+
+        .empty-state {
+            padding: 18px;
+            border-radius: 18px;
+            background: rgba(31, 41, 55, 0.04);
+            color: var(--muted);
+        }
+
+        .map-panel {
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            min-height: calc(100vh - 24px);
+            max-height: calc(100vh - 24px);
+        }
+
+        .map-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px 0;
+            flex-wrap: wrap;
+        }
+
+        .map-toolbar h2 { font-size: 1.15rem; }
+        .toolbar-note { color: var(--muted); font-size: 0.93rem; }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.84);
+            border: 1px solid rgba(31, 41, 55, 0.08);
+            font-size: 0.86rem;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+        }
+
+        #map {
+            flex: 1;
+            min-height: 420px;
+            border-radius: 26px;
+            overflow: hidden;
+        }
+
+        .leaflet-container { font-family: 'Space Grotesk', sans-serif; }
+
+        .poi-marker,
+        .landmark-marker {
+            border-radius: 999px;
+            border: 2px solid rgba(255, 255, 255, 0.92);
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+        }
+
+        .poi-marker {
+            width: 12px;
+            height: 12px;
+            background: #1d4ed8;
+        }
+
+        .landmark-marker {
+            width: 14px;
+            height: 14px;
+            background: #ea580c;
+            animation: markerPulse 2.4s infinite;
+        }
+
+        .label-anchor {
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+        }
+
+        @keyframes markerPulse {
+            0% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.26); }
+            70% { box-shadow: 0 0 0 12px rgba(234, 88, 12, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0); }
+        }
+
+        .map-label {
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(31, 41, 55, 0.08);
+            border-radius: 999px;
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.1);
+            color: #111827;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            white-space: nowrap;
+        }
+
+        .map-label.landmark-label {
+            background: rgba(255, 247, 237, 0.96);
+            color: #9a3412;
+            border-color: rgba(234, 88, 12, 0.22);
+        }
+
+        .leaflet-tooltip-top.map-label::before,
+        .leaflet-tooltip-bottom.map-label::before,
+        .leaflet-tooltip-left.map-label::before,
+        .leaflet-tooltip-right.map-label::before { display: none; }
+
+        #routesView,
+        #detailsView {
+            min-height: 0;
+        }
+
+        #detailsView {
+            flex: 1;
+            overflow: visible;
+        }
+
+        .steps-list {
+            margin-top: 16px;
+            padding-right: 4px;
+        }
+
+        @media (max-width: 1100px) {
+            .app-shell { grid-template-columns: 1fr; }
+            .panel, .map-panel { min-height: auto; }
+            .map-panel { min-height: 58vh; }
+            body { overflow: auto; }
+            .panel, .map-panel { max-height: none; }
+            .panel { overflow: visible; }
+        }
+
+        @media (max-width: 720px) {
+            .app-shell {
+                width: min(100% - 12px, 100%);
+                margin: 6px auto;
+                gap: 12px;
+            }
+
+            .field-grid { grid-template-columns: 1fr; }
+            .icon-btn { width: 100%; height: 48px; }
+            .summary-grid { grid-template-columns: 1fr; }
+            #map { min-height: 56vh; }
+            .map-toolbar { padding: 8px 4px 0; }
+        }
+    </style>
+</head>
+<body>
+    <main class="app-shell">
+        <aside class="panel">
+            <section class="brand-card">
+                <div class="eyebrow"><i class="fa-solid fa-location-dot"></i> TCE Campus</div>
+                <h1>Smarter campus routing with cleaner flow.</h1>
+                <p>Pick start and destination first. Then compare the best routes, choose one, and view friendly step-by-step guidance.</p>
+            </section>
+
+            <section class="card">
+                <form id="routeForm">
+                    <div class="field-grid">
+                        <div class="field">
+                            <label for="start">From</label>
+                            <select id="start" required>
+                                <option value="" disabled selected>Select starting point</option>
+                                {% for loc in locations %}
+                                <option value="{{ loc }}">{{ loc }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="button" class="icon-btn" id="swapBtn" aria-label="Swap start and destination">
+                            <i class="fa-solid fa-right-left"></i>
+                        </button>
+                        <div class="field">
+                            <label for="end">To</label>
+                            <select id="end" required>
+                                <option value="" disabled selected>Select destination</option>
+                                {% for loc in locations %}
+                                <option value="{{ loc }}">{{ loc }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="primary-btn" id="goBtn">Show Routes</button>
+                </form>
+            </section>
+
+            <section class="card hidden" id="routesView">
+                <div class="section-head">
+                    <div>
+                        <h2>Choose a Route</h2>
+                        <p id="routesIntro">Pick one of the shortest route options below.</p>
+                    </div>
+                </div>
+                <div id="routeChoices" class="route-stack"></div>
+            </section>
+
+            <section class="card hidden" id="detailsView">
+                <div class="section-head">
+                    <div>
+                        <h2 id="detailsTitle">Route Details</h2>
+                        <p id="stepsCaption">Selected route instructions will appear here.</p>
+                    </div>
+                    <span class="badge-chip" id="stepCount">0 steps</span>
+                </div>
+                <div class="summary-grid">
+                    <div class="stat-tile">
+                        <span class="stat-label">Selected Route</span>
+                        <span class="stat-value" id="selectedRouteName">-</span>
+                    </div>
+                    <div class="stat-tile">
+                        <span class="stat-label">Distance</span>
+                        <span class="stat-value" id="distVal">-</span>
+                    </div>
+                </div>
+                <button type="button" class="secondary-btn" id="backBtn">Back To Route Options</button>
+                <div id="steps" class="steps-list"></div>
+            </section>
+        </aside>
+
+        <section class="map-panel">
+            <div class="map-toolbar">
+                <div>
+                    <h2>Campus Map</h2>
+                    <div class="toolbar-note">Important labels show first, and more names appear as you zoom in.</div>
+                </div>
+                <div class="legend">
+                    <span class="legend-item"><span class="legend-dot" style="background:#ea580c"></span> Landmark</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#1d4ed8"></span> Place</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#16a34a"></span> Best route</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#f97316"></span> Next best</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#dc2626"></span> Longer option</span>
+                </div>
+            </div>
+            <div id="map"></div>
+        </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map;
+        let baseLineLayer;
+        let poiLayer;
+        let routeGroup;
+        let endpointGroup;
+        let labelLayer;
+        let labelEntries = [];
+        let currentRoutes = [];
+        let activeRouteIndex = null;
+
+        const routeChoices = document.getElementById('routeChoices');
+        const steps = document.getElementById('steps');
+        const goBtn = document.getElementById('goBtn');
+        const routesView = document.getElementById('routesView');
+        const detailsView = document.getElementById('detailsView');
+
+        function routeIconClass(text) {
+            const content = text.toLowerCase();
+            if (content.includes('left')) return 'fa-arrow-left';
+            if (content.includes('right')) return 'fa-arrow-right';
+            if (content.includes('reached')) return 'fa-flag-checkered';
+            if (content.includes('start')) return 'fa-person-walking';
+            return 'fa-route';
+        }
+
+        function formatMeters(distance) {
+            return `${Math.round(distance)} m`;
+        }
+
+        function previewDash(index) {
+            return [null, '14 10', '5 12'][index] || '8 10';
+        }
+
+        function offsetPath(path, offsetMeters) {
+            if (!offsetMeters || path.length < 2) return path;
+
+            return path.map((point, index) => {
+                const prev = path[Math.max(0, index - 1)];
+                const next = path[Math.min(path.length - 1, index + 1)];
+                const dy = next[0] - prev[0];
+                const dx = next[1] - prev[1];
+                const length = Math.hypot(dx, dy) || 1;
+                const perpLat = -dx / length;
+                const perpLon = dy / length;
+                const metersPerLat = 111320;
+                const metersPerLon = 111320 * Math.cos((point[0] * Math.PI) / 180 || 0);
+
+                return [
+                    point[0] + (perpLat * offsetMeters) / metersPerLat,
+                    point[1] + (perpLon * offsetMeters) / metersPerLon
+                ];
+            });
+        }
+
+        function showRoutesState() {
+            routesView.classList.remove('hidden');
+            detailsView.classList.add('hidden');
+            drawRoutes();
+        }
+
+        function showDetailsState() {
+            routesView.classList.add('hidden');
+            detailsView.classList.remove('hidden');
+            drawRoutes();
+        }
+
+        function resetRouteUI(message = 'Routes will appear here after you search.') {
+            currentRoutes = [];
+            activeRouteIndex = null;
+            routesView.classList.add('hidden');
+            detailsView.classList.add('hidden');
+            routeChoices.innerHTML = `<div class="empty-state">${message}</div>`;
+            steps.innerHTML = `<div class="empty-state">Select a route to see directions.</div>`;
+            document.getElementById('selectedRouteName').textContent = '-';
+            document.getElementById('distVal').textContent = '-';
+            document.getElementById('stepCount').textContent = '0 steps';
+            document.getElementById('detailsTitle').textContent = 'Route Details';
+            document.getElementById('stepsCaption').textContent = 'Selected route instructions will appear here.';
+            routeGroup?.clearLayers();
+            endpointGroup?.clearLayers();
+        }
+
+        function drawRoutes() {
+            routeGroup.clearLayers();
+            endpointGroup.clearLayers();
+
+            [...currentRoutes].reverse().forEach((route) => {
+                const index = currentRoutes.findIndex(item => item.id === route.id);
+                const selected = index === activeRouteIndex;
+                if (activeRouteIndex !== null && !selected) {
+                    return;
+                }
+
+                const previewOffset = activeRouteIndex === null
+                    ? (index - ((currentRoutes.length - 1) / 2)) * 2.8
+                    : 0;
+                const routePath = activeRouteIndex === null ? offsetPath(route.path, previewOffset) : route.path;
+
+                L.polyline(routePath, {
+                    color: '#ffffff',
+                    weight: selected ? 12 : 9,
+                    opacity: 0.96,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                }).addTo(routeGroup);
+
+                L.polyline(routePath, {
+                    color: route.color,
+                    weight: selected ? 7 : 5,
+                    opacity: selected ? 0.98 : 0.9,
+                    lineCap: selected ? 'round' : 'butt',
+                    lineJoin: 'round',
+                    dashArray: selected ? null : previewDash(index)
+                }).addTo(routeGroup);
+            });
+
+            if (activeRouteIndex === null || !currentRoutes[activeRouteIndex]) {
+                return;
+            }
+
+            const selectedRoute = currentRoutes[activeRouteIndex];
+            const start = selectedRoute.start_marker || selectedRoute.path[0];
+            const end = selectedRoute.end_marker || selectedRoute.path[selectedRoute.path.length - 1];
+
+            L.circleMarker(start, {
+                radius: 9,
+                color: '#ffffff',
+                weight: 3,
+                fillColor: '#111827',
+                fillOpacity: 1
+            }).bindTooltip('Start', { permanent: true, direction: 'right', offset: [12, 0], className: 'map-label' }).addTo(endpointGroup);
+
+            L.circleMarker(end, {
+                radius: 9,
+                color: '#ffffff',
+                weight: 3,
+                fillColor: selectedRoute.color,
+                fillOpacity: 1
+            }).bindTooltip('Destination', { permanent: true, direction: 'right', offset: [12, 0], className: 'map-label landmark-label' }).addTo(endpointGroup);
+        }
+
+        function renderSteps(route) {
+            document.getElementById('selectedRouteName').textContent = route.name;
+            document.getElementById('distVal').textContent = formatMeters(route.total_dist);
+            document.getElementById('detailsTitle').textContent = `${route.start} to ${route.end}`;
+            document.getElementById('stepsCaption').textContent = `Following ${route.name}.`;
+            document.getElementById('stepCount').textContent = `${route.directions.length} steps`;
+
+            steps.innerHTML = '';
+            steps.scrollTop = 0;
+            route.directions.forEach((direction, index) => {
+                const card = document.createElement('div');
+                card.className = 'step';
+                card.innerHTML = `
+                    <div class="step-icon"><i class="fa-solid ${routeIconClass(direction)}"></i></div>
+                    <div>
+                        <small>Step ${index + 1}</small>
+                        <div>${direction}</div>
+                    </div>
+                `;
+                steps.appendChild(card);
+            });
+        }
+
+        function selectRoute(index) {
+            activeRouteIndex = index;
+            renderRouteChoices();
+            drawRoutes();
+            renderSteps(currentRoutes[index]);
+            showDetailsState();
+        }
+
+        function renderRouteChoices() {
+            routeChoices.innerHTML = '';
+            currentRoutes.forEach((route, index) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = `route-option ${index === activeRouteIndex ? 'active' : ''}`;
+                button.innerHTML = `
+                    <div class="route-meta">
+                        <span class="route-swatch" style="background:${route.color}"></span>
+                        <div>
+                            <div class="route-title">${route.name}</div>
+                            <div class="route-subtitle">${route.start} to ${route.end}</div>
+                        </div>
+                    </div>
+                    <span class="badge-chip">${formatMeters(route.total_dist)}</span>
+                `;
+                button.addEventListener('click', () => selectRoute(index));
+                routeChoices.appendChild(button);
+            });
+        }
+
+        function buildLabelEntries(data) {
+            labelEntries = [];
+            Object.entries(data.points).forEach(([name, pos], index) => {
+                const meta = data.metadata[name] || {};
+                const iconClass = meta.is_landmark ? 'landmark-marker' : 'poi-marker';
+                L.marker(pos, {
+                    icon: L.divIcon({
+                        className: iconClass,
+                        iconSize: meta.is_landmark ? [14, 14] : [12, 12]
+                    })
+                }).addTo(poiLayer);
+
+                const anchor = L.marker(pos, {
+                    interactive: false,
+                    icon: L.divIcon({ className: 'label-anchor', iconSize: [1, 1] })
+                });
+                anchor.bindTooltip(meta.display_name || name, {
+                    permanent: true,
+                    direction: 'top',
+                    offset: [0, -16 - ((index % 3) * 4)],
+                    className: `map-label ${meta.is_landmark ? 'landmark-label' : ''}`
+                });
+
+                labelEntries.push({
+                    name,
+                    pos,
+                    anchor,
+                    labelTier: meta.label_tier ?? 2,
+                    priority: meta.is_landmark ? 100 : (meta.label_tier === 0 ? 80 : meta.label_tier === 1 ? 55 : 30)
+                });
+            });
+        }
+
+        function minZoomForTier(tier) {
+            if (tier === 0) return 16;
+            if (tier === 1) return 17.5;
+            return 18.5;
+        }
+
+        function collisionRadiusForZoom(zoom) {
+            if (zoom < 17) return 90;
+            if (zoom < 18) return 68;
+            if (zoom < 19) return 48;
+            return 34;
+        }
+
+        function updateVisibleLabels() {
+            if (!map || !labelEntries.length) return;
+
+            labelLayer.clearLayers();
+            const zoom = map.getZoom();
+            const visible = [];
+            const radius = collisionRadiusForZoom(zoom);
+
+            const candidates = [...labelEntries]
+                .filter(entry => zoom >= minZoomForTier(entry.labelTier))
+                .map(entry => ({ ...entry, point: map.latLngToContainerPoint(entry.pos) }))
+                .filter(entry => entry.point.x >= -40 && entry.point.y >= -40 && entry.point.x <= map.getSize().x + 40 && entry.point.y <= map.getSize().y + 40)
+                .sort((a, b) => b.priority - a.priority);
+
+            candidates.forEach(entry => {
+                const tooClose = visible.some(shown => entry.point.distanceTo(shown.point) < radius);
+                if (!tooClose) {
+                    visible.push(entry);
+                    entry.anchor.addTo(labelLayer);
+                }
+            });
+        }
+
+        async function init() {
+            map = L.map('map', { zoomControl: true, scrollWheelZoom: true }).setView([9.883, 78.081], 18);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 20,
+                subdomains: 'abcd'
+            }).addTo(map);
+
+            baseLineLayer = L.layerGroup().addTo(map);
+            poiLayer = L.layerGroup().addTo(map);
+            routeGroup = L.layerGroup().addTo(map);
+            endpointGroup = L.layerGroup().addTo(map);
+            labelLayer = L.layerGroup().addTo(map);
+
+            const res = await fetch('/map_data');
+            const data = await res.json();
+
+            buildLabelEntries(data);
+            updateVisibleLabels();
+            map.on('zoomend moveend', updateVisibleLabels);
+
+            ['wheel', 'touchmove'].forEach(eventName => {
+                steps.addEventListener(eventName, (event) => {
+                    event.stopPropagation();
+                }, { passive: true });
+            });
+        }
+
+        document.getElementById('swapBtn').addEventListener('click', () => {
+            const start = document.getElementById('start');
+            const end = document.getElementById('end');
+            const temp = start.value;
+            start.value = end.value;
+            end.value = temp;
+        });
+
+        document.getElementById('backBtn').addEventListener('click', () => {
+            activeRouteIndex = null;
+            showRoutesState();
+        });
+
+        document.getElementById('routeForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const start = document.getElementById('start').value;
+            const end = document.getElementById('end').value;
+
+            if (!start || !end) return;
+
+            goBtn.disabled = true;
+            goBtn.textContent = 'Calculating Routes...';
+
+            try {
+                const res = await fetch('/route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start, end })
+                });
+                const data = await res.json();
+
+                if (!res.ok || !data.routes || !data.routes.length) {
+                    resetRouteUI(data.error || 'No route found for this selection.');
+                    return;
+                }
+
+                currentRoutes = data.routes.map(route => ({
+                    ...route,
+                    start: data.start,
+                    end: data.end
+                }));
+                activeRouteIndex = null;
+
+                document.getElementById('routesIntro').textContent = `${data.start} to ${data.end} - choose the route you prefer.`;
+                renderRouteChoices();
+                showRoutesState();
+
+                const allPoints = currentRoutes.flatMap(route => route.path);
+                map.fitBounds(allPoints, { padding: [45, 45] });
+            } catch (error) {
+                resetRouteUI('Something went wrong while calculating the route.');
+            } finally {
+                goBtn.disabled = false;
+                goBtn.textContent = 'Show Routes';
+            }
+        });
+
+        resetRouteUI();
+        init();
+    </script>
+</body>
+</html>

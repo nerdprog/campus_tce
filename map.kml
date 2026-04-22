@@ -1,0 +1,431 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>map</name>
+    <description/>
+    <Style id="icon-1899-0288D1-nodesc-normal">
+      <IconStyle>
+        <color>ffd18802</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+        <hotSpot x="32" xunits="pixels" y="64" yunits="insetPixels"/>
+      </IconStyle>
+      <LabelStyle>
+        <scale>0</scale>
+      </LabelStyle>
+      <BalloonStyle>
+        <text><![CDATA[<h3>$[name]</h3>]]></text>
+      </BalloonStyle>
+    </Style>
+    <Style id="icon-1899-0288D1-nodesc-highlight">
+      <IconStyle>
+        <color>ffd18802</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+        <hotSpot x="32" xunits="pixels" y="64" yunits="insetPixels"/>
+      </IconStyle>
+      <LabelStyle>
+        <scale>1</scale>
+      </LabelStyle>
+      <BalloonStyle>
+        <text><![CDATA[<h3>$[name]</h3>]]></text>
+      </BalloonStyle>
+    </Style>
+    <StyleMap id="icon-1899-0288D1-nodesc">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#icon-1899-0288D1-nodesc-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#icon-1899-0288D1-nodesc-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Style id="line-000000-1200-nodesc-normal">
+      <LineStyle>
+        <color>ff000000</color>
+        <width>1.2</width>
+      </LineStyle>
+      <BalloonStyle>
+        <text><![CDATA[<h3>$[name]</h3>]]></text>
+      </BalloonStyle>
+    </Style>
+    <Style id="line-000000-1200-nodesc-highlight">
+      <LineStyle>
+        <color>ff000000</color>
+        <width>1.8</width>
+      </LineStyle>
+      <BalloonStyle>
+        <text><![CDATA[<h3>$[name]</h3>]]></text>
+      </BalloonStyle>
+    </Style>
+    <StyleMap id="line-000000-1200-nodesc">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#line-000000-1200-nodesc-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#line-000000-1200-nodesc-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Folder>
+      <name>Untitled layer</name>
+      <Placemark>
+        <name>TCE Parking Lot</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0806848,9.8827895,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>TCE LIBRARY</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0812695,9.8832269,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Department of ECE</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0823526,9.8828304,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Food Court</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0832297,9.883162,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Department of Computer Science and Engineering</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0834329,9.882798,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Department of IT</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0834189,9.8823995,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>TCE SOUTH ENTRANCE</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0834825,9.8814748,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>T S Srinivasan Centre for Automotive Research</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0806721,9.8827324,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>B Halls</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0830074,9.8819995,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>TCE  Main Entarance</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0792671,9.8855751,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Mens Hostel Gate 1</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0794637,9.8855319,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Mens Hostel Gate 2</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0807669,9.8841208,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Fountain</name>
+        <description>Landmark</description>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.082591,9.883189,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>TCE Name Board</name>
+        <description>Landmark</description>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.081763,9.883132,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Saraswathi statue</name>
+        <description>Landmark</description>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.082598,9.882850,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Gate 1 to Gate 2 (via path  1)</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.079478,9.8855647,0
+            78.0804922,9.8855432,0
+            78.0806672,9.8855168,0
+            78.0807782,9.8854708,0
+            78.0808167,9.8854273,0
+            78.0808073,9.8846798,0
+            78.0807678,9.8841222,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>Gate 1 to Gate 2 (via path 2)</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.079478,9.8855647,0
+            78.0794337,9.8851383,0
+            78.0793878,9.8841728,0
+            78.0807678,9.8841222,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>Gate 2 to TSS center</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0807669,9.8841208,0
+            78.0807377,9.8835573,0
+            78.0806724,9.8827338,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>parking to library</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0806841,9.8827926,0
+            78.0807226,9.8832674,0
+            78.0812695,9.8832269,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>lib to ece</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0812695,9.8832269,0
+            78.0823735,9.8831876,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>lib to open air</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0812695,9.8832269,0
+            78.081733,9.883213,0
+            78.0818114,9.8826765,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>Open Air Auditorium</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0818114,9.8826765,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>ece to fc</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0823735,9.8831876,0
+            78.0832297,9.883162,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>fc to  cse</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0832297,9.883162,0
+            78.0833497,9.883101,0
+            78.0834037,9.8830452,0
+            78.0834335,9.8829471,0
+            78.0834329,9.882798,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>cse to it</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0834329,9.882798,0
+            78.0834189,9.8823995,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>it to south entrance</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0834189,9.8823995,0
+            78.0834111,9.8816367,0
+            78.0834825,9.8814748,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>parking to b halls</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0806841,9.8827926,0
+            78.0806591,9.8824043,0
+            78.0806323,9.8820714,0
+            78.0830074,9.8819995,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>it to b halls</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0830074,9.8819995,0
+            78.083017,9.8821771,0
+            78.0834138,9.8821758,0
+            78.0834189,9.8823995,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>gate 2 to lib</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0807669,9.8841208,0
+            78.0807226,9.8832674,0
+            78.0812695,9.8832269,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>gate 2 to parking</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0807669,9.8841208,0
+            78.0806848,9.8827895,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>M Halls</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            78.0810213,9.8825456,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>parking to m halls</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0810213,9.8825456,0
+            78.0806848,9.8827895,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>Open Air Auditorium to m halls</name>
+        <styleUrl>#line-000000-1200-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            78.0810213,9.8825456,0
+            78.0818114,9.8826765,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+    </Folder>
+  </Document>
+</kml>
