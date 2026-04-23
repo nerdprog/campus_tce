@@ -70,8 +70,10 @@ LANDMARK_SEARCH_RADIUS = 18
 FINAL_LEG_LANDMARK_RADIUS = 14
 LANDMARK_FALLBACK_RADIUS = 30
 LOCATION_ACCESS_MAX_DISTANCE = 90
+ACCESS_CANDIDATE_LIMIT = 4
+ACCESS_CANDIDATE_MAX_DISTANCE = 45
 MAX_ROUTE_RATIO = 1.35
-MAX_ROUTE_OVERLAP = 0.88
+MAX_ROUTE_OVERLAP = 0.80
 START_NEIGHBORHOOD_AVOID_RADIUS = 35
 MANUAL_SHORTCUTS = [
     ((9.8841222, 78.0807678), (9.8837742, 78.0807706)),
@@ -108,6 +110,9 @@ INTERNAL_PLACE_KEYWORDS = (
     "department",
     "auditorium",
 )
+MIN_TURN_SEGMENT_METERS = 15
+MIN_BEND_SEGMENT_METERS = 28
+MIN_INSTRUCTION_SPACING_METERS = 18
 
 
 def distance(a, b):
@@ -439,36 +444,54 @@ def nearest_graph_node(target, graph_nodes):
     return best_node, best_distance
 
 
-def location_access_nodes(graph, points, metadata):
+def nearest_graph_nodes(target, graph_nodes, limit=ACCESS_CANDIDATE_LIMIT, max_distance=ACCESS_CANDIDATE_MAX_DISTANCE):
+    ranked = sorted(
+        ((candidate, distance(target, candidate)) for candidate in graph_nodes),
+        key=lambda item: item[1],
+    )
+    filtered = [(node, gap) for node, gap in ranked if gap <= max_distance]
+    if filtered:
+        return filtered[:limit]
+    return ranked[:1]
+
+
+def location_access_candidates(graph, points, metadata):
     graph_nodes = list(graph.keys())
     access_nodes = {}
 
     for name, pt in points.items():
         if not graph_nodes:
-            access_nodes[name] = pt
+            access_nodes[name] = [(pt, 0.0)]
             continue
 
         candidates = metadata.get(name, {}).get("geometry") or [pt]
-        best_node = None
-        best_distance = float("inf")
+        ranked_nodes = []
         for candidate in candidates:
-            node, gap = nearest_graph_node(candidate, graph_nodes)
-            if node is not None and gap < best_distance:
-                best_node = node
-                best_distance = gap
+            ranked_nodes.extend(nearest_graph_nodes(candidate, graph_nodes))
 
+        deduped = {}
+        for node, gap in ranked_nodes:
+            if node not in deduped or gap < deduped[node]:
+                deduped[node] = gap
+
+        ordered = sorted(deduped.items(), key=lambda item: item[1])
+        if ordered:
+            access_nodes[name] = ordered[:ACCESS_CANDIDATE_LIMIT]
+            continue
+
+        best_node, best_distance = nearest_graph_node(pt, graph_nodes)
         if best_node is None:
-            access_nodes[name] = pt
+            access_nodes[name] = [(pt, 0.0)]
             continue
 
         if best_distance > LOCATION_ACCESS_MAX_DISTANCE:
-            access_nodes[name] = pt
             cost = best_distance * edge_preference({"type": "access_link"})
             graph[pt].append((best_node, cost, best_distance))
             graph[best_node].append((pt, cost, best_distance))
             graph_nodes.append(pt)
+            access_nodes[name] = [(pt, 0.0)]
         else:
-            access_nodes[name] = best_node
+            access_nodes[name] = [(best_node, best_distance)]
 
     return access_nodes
 
@@ -644,6 +667,52 @@ def build_seeded_start_routes(graph, start_point, end_point, max_routes=3):
     return select_route_set(candidate_paths, max_routes=max_routes)
 
 
+def path_has_hairpin(path):
+    for idx in range(1, len(path) - 1):
+        incoming = bearing(path[idx - 1], path[idx])
+        outgoing = bearing(path[idx], path[idx + 1])
+        if abs(angle_diff(outgoing, incoming)) >= 165:
+            return True
+    return False
+
+
+def build_candidate_routes(graph, start_candidates, end_candidates, max_routes=3):
+    if not start_candidates or not end_candidates:
+        return []
+
+    # Identify the single best entry/exit pair first
+    best_pair = None
+    best_initial_cost = float("inf")
+
+    for start_node, start_gap in start_candidates:
+        for end_node, end_gap in end_candidates:
+            path, route_cost = dijkstra(graph, start_node, end_node)
+            if not path or len(path) < 2:
+                continue
+            if path_has_hairpin(path):
+                continue
+
+            access_penalty = (start_gap * 0.35) + (end_gap * 0.55)
+            total_initial_cost = route_cost + access_penalty
+            if total_initial_cost < best_initial_cost:
+                best_initial_cost = total_initial_cost
+                best_pair = (start_node, end_node)
+
+    if not best_pair:
+        return []
+
+    # Generate alternatives strictly between these two nodes
+    start_node, end_node = best_pair
+    alternatives = build_alternative_routes(graph, start_node, end_node, max_routes=max_routes * 2)
+
+    all_paths = []
+    for path in alternatives:
+        if not path_has_hairpin(path) and all(path != existing for existing in all_paths):
+            all_paths.append(path)
+
+    return select_route_set(all_paths, max_routes=max_routes)
+
+
 def get_poi_near(pt, points, metadata, tol=5, include_routing_only=False):
     closest_name = None
     closest_dist = float("inf")
@@ -693,31 +762,34 @@ def point_segment_distance(point, seg_start, seg_end):
 
 
 def landmark_before_turn(path, turn_index, points, metadata, used_landmarks, destination_name=None):
-    best_name = None
+    best_info = None
     best_dist = float("inf")
-    best_side = "left"
 
-    for idx in range(max(0, turn_index - 2), turn_index):
+    # Look back up to 3 segments for a landmark
+    for idx in range(max(0, turn_index - 3), turn_index):
         p1 = path[idx]
         p2 = path[idx + 1]
         for name, coords in points.items():
             if name in used_landmarks or not is_instruction_landmark(name, metadata, destination_name):
                 continue
             dist, t = point_segment_distance(coords, p1, p2)
-            if dist < LANDMARK_SEARCH_RADIUS and t >= 0.15 and dist < best_dist:
-                best_name = name
+            if dist < LANDMARK_SEARCH_RADIUS and 0.1 <= t <= 0.9 and dist < best_dist:
                 best_dist = dist
-                best_side = get_side_of_path(p1, p2, coords)
+                best_info = {
+                    "name": name,
+                    "side": get_side_of_path(p1, p2, coords),
+                    "index": idx,
+                    "t": t
+                }
 
-    return best_name, best_side
+    return best_info
 
 
-def fallback_landmark_near_segment(path, seg_start, seg_end, points, metadata, used_landmarks, destination_name=None):
-    best_name = None
+def fallback_landmark_near_segment(path, start_index, end_index, points, metadata, used_landmarks, destination_name=None):
+    best_info = None
     best_dist = float("inf")
-    best_side = "left"
 
-    for idx in range(seg_start, max(seg_start + 1, seg_end)):
+    for idx in range(start_index, max(start_index + 1, end_index)):
         p1 = path[idx]
         p2 = path[idx + 1]
         for name, coords in points.items():
@@ -725,17 +797,20 @@ def fallback_landmark_near_segment(path, seg_start, seg_end, points, metadata, u
                 continue
             dist, t = point_segment_distance(coords, p1, p2)
             if dist < LANDMARK_FALLBACK_RADIUS and 0.05 <= t <= 0.95 and dist < best_dist:
-                best_name = name
                 best_dist = dist
-                best_side = get_side_of_path(p1, p2, coords)
+                best_info = {
+                    "name": name,
+                    "side": get_side_of_path(p1, p2, coords),
+                    "index": idx,
+                    "t": t
+                }
 
-    return best_name, best_side
+    return best_info
 
 
 def landmark_on_final_leg(path, start_index, points, metadata, used_landmarks, destination_name=None):
-    best_name = None
+    best_info = None
     best_dist = float("inf")
-    best_side = "left"
 
     for idx in range(start_index, len(path) - 1):
         p1 = path[idx]
@@ -745,22 +820,28 @@ def landmark_on_final_leg(path, start_index, points, metadata, used_landmarks, d
                 continue
             dist, t = point_segment_distance(coords, p1, p2)
             if dist < FINAL_LEG_LANDMARK_RADIUS and 0.1 <= t <= 0.9 and dist < best_dist:
-                best_name = name
                 best_dist = dist
-                best_side = get_side_of_path(p1, p2, coords)
+                best_info = {
+                    "name": name,
+                    "side": get_side_of_path(p1, p2, coords),
+                    "index": idx,
+                    "t": t
+                }
 
-    return best_name, best_side
+    return best_info
 
 
-def turn_phrase(path, turn_index, graph):
+def describe_maneuver(path, turn_index, graph):
     if turn_index <= 0 or turn_index >= len(path) - 1:
         return None
 
     incoming = bearing(path[turn_index - 1], path[turn_index])
     outgoing = bearing(path[turn_index], path[turn_index + 1])
     diff = angle_diff(outgoing, incoming)
+    magnitude = abs(diff)
 
-    if abs(diff) < 30:
+    # Ignore very subtle shifts
+    if magnitude < 18:
         return None
 
     exits = []
@@ -768,24 +849,41 @@ def turn_phrase(path, turn_index, graph):
         if neighbor == path[turn_index - 1]:
             continue
         exit_angle = angle_diff(bearing(path[turn_index], neighbor), incoming)
+        # Identify valid branching paths
         if abs(exit_angle) >= 20:
             exits.append(exit_angle)
 
+    direction = "right" if diff > 0 else "left"
     if diff > 0:
         side_exits = sorted(angle for angle in exits if angle > 20)
-        direction = "right"
     else:
         side_exits = sorted((angle for angle in exits if angle < -20), reverse=True)
-        direction = "left"
 
+    ordinal = None
     if len(side_exits) > 1:
-        rank = min(range(len(side_exits)), key=lambda i: abs(side_exits[i] - diff)) + 1
-        return f"take the {ordinal_name(rank)} {direction}"
+        # Match current path with the sorted list of potential turns to same side
+        ordinal = min(range(len(side_exits)), key=lambda i: abs(side_exits[i] - diff)) + 1
 
-    if abs(diff) > 135:
-        return f"make a sharp {direction}"
+    maneuver_type = "bend" if magnitude < 65 else "turn"
+    if magnitude >= 145:
+        action = f"make a sharp {direction}"
+        maneuver_type = "sharp_turn"
+    elif ordinal and maneuver_type == "turn":
+        action = f"take the {ordinal_name(ordinal)} {direction}"
+    elif maneuver_type == "bend":
+        action = f"bear {direction}"
+    else:
+        action = f"turn {direction}"
 
-    return f"turn {direction}"
+    return {
+        "index": turn_index,
+        "diff": diff,
+        "magnitude": magnitude,
+        "direction": direction,
+        "ordinal": ordinal,
+        "type": maneuver_type,
+        "action": action,
+    }
 
 
 def get_side_of_path(p1, p2, landmark):
@@ -797,163 +895,144 @@ def get_side_of_path(p1, p2, landmark):
     return "left" if diff < 0 else "right"
 
 
-def soften_action(action):
-    if "sharp left" in action:
-        return "keep following the path as it bends left"
-    if "sharp right" in action:
-        return "keep following the path as it bends right"
-    if "take the" in action:
-        return action
-    if "left" in action:
-        return "keep following the path as it bends left"
-    if "right" in action:
-        return "keep following the path as it bends right"
-    return action
-
-
-def segment_instruction(action, segment_length):
-    if segment_length <= 55:
-        return f"{soften_action(action).capitalize()}."
-    if segment_length <= 120:
-        return f"Walk straight for a while, then {action}."
-    if segment_length <= 220:
-        return f"Continue along the path, then {action}."
-    return f"Continue for about {segment_length} meters, then {action}."
+def final_leg_instruction(end_name, final_landmark=None, final_side="left", destination_side=None):
+    destination_label = display_name(end_name)
+    if final_landmark and final_landmark != end_name:
+        return f"Pass {display_name(final_landmark)} on your {final_side}; your destination, {destination_label}, will be just ahead."
+    if destination_side:
+        return f"Keep going straight; {destination_label} will be on your {destination_side}."
+    return f"Continue straight to reach {destination_label}."
 
 
 def narrate_route(path, points, metadata, graph, start_name=None, end_name=None):
-    if len(path) < 2:
+    if not path or len(path) < 2:
         return ["You are already at your destination."]
 
     start_poi = start_name or get_poi_near(path[0], points, metadata, tol=12)
     end_poi = end_name or get_poi_near(path[-1], points, metadata, tol=12, include_routing_only=True)
     used_landmarks = {name for name in (start_poi, end_poi) if name}
 
-    turn_indices = [idx for idx in range(1, len(path) - 1) if turn_phrase(path, idx, graph)]
-    instructions = [f"Start from {display_name(start_poi) if start_poi else 'your location'} and head straight."]
-
-    segment_start = 0
-    turn_data = []
-    for turn_index in turn_indices:
-        action = turn_phrase(path, turn_index, graph)
-        landmark_name, side = landmark_before_turn(
-            path,
-            turn_index,
-            points,
-            metadata,
-            used_landmarks,
-            destination_name=end_poi,
-        )
-        if not landmark_name:
-            landmark_name, side = fallback_landmark_near_segment(
-                path,
-                segment_start,
-                turn_index,
-                points,
-                metadata,
-                used_landmarks,
-                destination_name=end_poi,
-            )
-
-        turn_data.append({
-            "index": turn_index,
-            "action": action,
-            "landmark_name": landmark_name,
-            "side": side,
-            "segment_start": segment_start,
-            "segment_length": round(path_distance(path[segment_start: turn_index + 1])),
-        })
-        segment_start = turn_index
-
-    segment_start = 0
-    for pos, item in enumerate(turn_data):
-        turn_index = item["index"]
-        action = item["action"]
-        landmark_name = item["landmark_name"]
-        side = item["side"]
-        segment_length = item["segment_length"]
-
-        if landmark_name in used_landmarks:
-            landmark_name = None
-
-        next_item = turn_data[pos + 1] if pos + 1 < len(turn_data) else None
-        if (
-            not landmark_name
-            and next_item
-            and next_item["landmark_name"]
-            and segment_length <= 90
-        ):
-            segment_start = turn_index
+    maneuvers = []
+    previous_maneuver_index = 0
+    for idx in range(1, len(path) - 1):
+        maneuver = describe_maneuver(path, idx, graph)
+        if not maneuver:
             continue
 
-        if landmark_name:
-            used_landmarks.add(landmark_name)
-            instructions.append(
-                f"Walk straight until you see {display_name(landmark_name)} on your {side}, then {action}."
-            )
+        # Distance since last maneuver or start
+        segment_dist = path_distance(path[previous_maneuver_index : idx + 1])
+        
+        # Consolidate maneuvers that are very close to each other
+        if segment_dist < 12 and maneuvers:
+            # If the new maneuver is more significant (sharper), replace the previous one
+            if maneuver["magnitude"] > maneuvers[-1]["magnitude"]:
+                prev_start = maneuvers[-1]["segment_start_idx"]
+                maneuvers[-1] = maneuver
+                maneuvers[-1]["segment_start_idx"] = prev_start
+            continue
+
+        maneuver["segment_start_idx"] = previous_maneuver_index
+        maneuvers.append(maneuver)
+        previous_maneuver_index = idx
+
+    start_label = display_name(start_poi) if start_poi else "your location"
+    instructions = [f"Head out from {start_label}."]
+
+    for maneuver in maneuvers:
+        turn_index = maneuver["index"]
+        leg_start_idx = maneuver["segment_start_idx"]
+        
+        # 1. Look for landmark in this segment
+        l_info = landmark_before_turn(path, turn_index, points, metadata, used_landmarks, destination_name=end_poi)
+        if not l_info:
+            l_info = fallback_landmark_near_segment(path, leg_start_idx, turn_index, points, metadata, used_landmarks, destination_name=end_poi)
+
+        if l_info:
+            used_landmarks.add(l_info["name"])
+            # Distance from current position to landmark
+            dist_to_landmark = path_distance(path[leg_start_idx : l_info["index"] + 1])
+            dist_on_seg = distance(path[l_info["index"]], path[l_info["index"] + 1]) * l_info["t"]
+            total_to_landmark = round(dist_to_landmark + dist_on_seg)
+            
+            # Distance from landmark to turn
+            dist_from_landmark_on_seg = distance(path[l_info["index"]], path[l_info["index"] + 1]) * (1 - l_info["t"])
+            dist_rest_to_turn = path_distance(path[l_info["index"] + 1 : turn_index + 1])
+            total_from_landmark = round(dist_from_landmark_on_seg + dist_rest_to_turn)
+
+            if total_to_landmark > 3:
+                instructions.append(f"Walk straight for {total_to_landmark} meters.")
+            
+            instructions.append(f"You will see {display_name(l_info['name'])} on your {l_info['side']}.")
+            
+            if total_from_landmark > 5:
+                instructions.append(f"Continue straight for {total_from_landmark} meters.")
+            
+            instructions.append(f"Then {maneuver['action']}.")
         else:
-            instructions.append(segment_instruction(action, segment_length))
+            # No landmark found, just give distance and action
+            dist_to_turn = round(path_distance(path[leg_start_idx : turn_index + 1]))
+            if dist_to_turn > 3:
+                instructions.append(f"Walk straight for {dist_to_turn} meters.")
+            instructions.append(f"Then {maneuver['action']}.")
 
-        segment_start = turn_index
+    # Final Leg
+    final_l_info = landmark_on_final_leg(path, previous_maneuver_index, points, metadata, used_landmarks, destination_name=end_poi)
+    if not final_l_info:
+        final_l_info = fallback_landmark_near_segment(path, previous_maneuver_index, len(path) - 1, points, metadata, used_landmarks, destination_name=end_poi)
 
-    final_landmark, final_side = landmark_on_final_leg(
-        path,
-        segment_start,
-        points,
-        metadata,
-        used_landmarks,
-        destination_name=end_poi,
-    )
-    if not final_landmark:
-        final_landmark, final_side = fallback_landmark_near_segment(
-            path,
-            segment_start,
-            len(path) - 1,
-            points,
-            metadata,
-            used_landmarks,
-            destination_name=end_poi,
-        )
+    if final_l_info:
+        dist_to_landmark = path_distance(path[previous_maneuver_index : final_l_info["index"] + 1])
+        dist_on_seg = distance(path[final_l_info["index"]], path[final_l_info["index"] + 1]) * final_l_info["t"]
+        total_to_landmark = round(dist_to_landmark + dist_on_seg)
+        
+        dist_from_landmark_on_seg = distance(path[final_l_info["index"]], path[final_l_info["index"] + 1]) * (1 - final_l_info["t"])
+        dist_rest_to_end = path_distance(path[final_l_info["index"] + 1 :])
+        total_from_landmark = round(dist_from_landmark_on_seg + dist_rest_to_end)
+
+        if total_to_landmark > 3:
+            instructions.append(f"Walk straight for {total_to_landmark} meters.")
+        
+        instructions.append(f"Pass {display_name(final_l_info['name'])} on your {final_l_info['side']}.")
+        
+        if total_from_landmark > 3:
+            instructions.append(f"Continue straight for {total_from_landmark} meters.")
+    else:
+        dist_to_end = round(path_distance(path[previous_maneuver_index:]))
+        if dist_to_end > 3:
+            instructions.append(f"Continue straight for {dist_to_end} meters.")
+
     if end_poi:
-        end_meta = metadata.get(end_poi, {})
-        is_precise_side_destination = end_meta.get("is_landmark") or end_meta.get("type") == "node"
-        if final_landmark and final_landmark != end_poi:
-            instructions.append(
-                f"Keep going past {display_name(final_landmark)} on your {final_side} to reach {display_name(end_poi)}."
-            )
-        elif is_precise_side_destination and end_poi in points:
-            destination_side = get_side_of_path(path[-2], path[-1], points[end_poi])
-            instructions.append(f"Continue straight and you will find {display_name(end_poi)} on your {destination_side}.")
-        else:
-            instructions.append(f"Continue straight to reach {display_name(end_poi)}.")
-    elif final_landmark:
-        instructions.append(f"Keep going past {display_name(final_landmark)} on your {final_side} to reach the destination.")
-
+        instructions.append(f"You will reach your destination, {display_name(end_poi)}.")
+    
+    # Final cleanup and normalization
     cleaned = []
     for text in instructions:
-        if not cleaned or cleaned[-1] != text:
-            cleaned.append(text[0].upper() + text[1:] if text else text)
-    cleaned.append("Reached your destination.")
+        if not text: continue
+        # Capitalize first letter
+        normalized = text[0].upper() + text[1:]
+        if not normalized.endswith("."):
+            normalized += "."
+        if not cleaned or cleaned[-1] != normalized:
+            cleaned.append(normalized)
+            
+    if not cleaned or "reached your destination" not in cleaned[-1].lower():
+        cleaned.append("You have reached your destination.")
+        
     return cleaned
 
 
-def serialize_route(path, points, metadata, graph, route_index, start_name, end_name):
+def serialize_route(path, points, metadata, graph, route_index, start_name, end_name, start_anchor=None, end_anchor=None):
     display_path = list(path)
-    start_point = points.get(start_name)
-    end_point = points.get(end_name)
-
-    if start_point and display_path and distance(start_point, display_path[0]) > 0.5:
-        display_path = [start_point] + display_path
-    if end_point and display_path and distance(end_point, display_path[-1]) > 0.5:
-        display_path = display_path + [end_point]
+    start_marker = list(start_anchor) if start_anchor else list(display_path[0])
+    end_marker = list(end_anchor) if end_anchor else list(display_path[-1])
 
     return {
         "id": route_index,
         "name": f"Route {route_index + 1}",
         "color": ROUTE_COLORS[route_index % len(ROUTE_COLORS)],
         "path": [[lat, lon] for lat, lon in display_path],
-        "start_marker": list(start_point) if start_point else list(display_path[0]),
-        "end_marker": list(end_point) if end_point else list(display_path[-1]),
+        "start_marker": start_marker,
+        "end_marker": end_marker,
         "total_dist": round(path_distance(display_path), 1),
         "directions": narrate_route(display_path, points, metadata, graph, start_name=start_name, end_name=end_name),
     }
@@ -1003,23 +1082,29 @@ def route():
         return jsonify({"error": "Location error"}), 400
 
     graph = build_osm_graph(ways_data, points)
-    location_nodes = location_access_nodes(graph, points, metadata)
-    start_meta = metadata.get(start_name, {})
-    start_point = points[start_name]
-    end_point = location_nodes[end_name]
+    access_candidates = location_access_candidates(graph, points, metadata)
+    start_candidates = access_candidates.get(start_name, [])
+    end_candidates = access_candidates.get(end_name, [])
 
-    route_paths = []
-    if start_point in graph and start_meta.get("type") in {"node", "kml"}:
-        route_paths = build_seeded_start_routes(graph, start_point, end_point, max_routes=3)
-
-    if not route_paths:
-        route_paths = build_alternative_routes(graph, location_nodes[start_name], end_point, max_routes=3)
+    route_paths = build_candidate_routes(graph, start_candidates, end_candidates, max_routes=3)
 
     if not route_paths:
         return jsonify({"error": "No path"}), 404
 
+    start_anchor = points[start_name]
+    end_anchor = points[end_name]
     routes = [
-        serialize_route(path, points, metadata, graph, index, start_name, end_name)
+        serialize_route(
+            path,
+            points,
+            metadata,
+            graph,
+            index,
+            start_name,
+            end_name,
+            start_anchor=start_anchor,
+            end_anchor=end_anchor,
+        )
         for index, path in enumerate(route_paths)
     ]
     return jsonify({"routes": routes, "start": display_name(start_name), "end": display_name(end_name)})
