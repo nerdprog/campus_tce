@@ -238,6 +238,37 @@
             border: 1px solid rgba(148, 163, 184, 0.22);
         }
 
+        .geo-btn {
+            background: rgba(232, 93, 4, 0.08);
+            border: 1px solid rgba(232, 93, 4, 0.15);
+            color: var(--accent);
+            cursor: pointer;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .geo-btn:hover {
+            background: rgba(232, 93, 4, 0.14);
+            transform: translateY(-1px);
+        }
+
+        .geo-btn:active {
+            transform: translateY(0);
+        }
+
+        .geo-btn.loading {
+            opacity: 0.7;
+            cursor: wait;
+        }
+
         .route-stack,
         .steps-list {
             display: flex;
@@ -524,6 +555,44 @@
             #map { min-height: 56vh; }
             .map-toolbar { padding: 8px 4px 0; }
         }
+        .user-location-marker {
+            background: #a855f7;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+            animation: userPulse 2s infinite;
+        }
+
+        @keyframes userPulse {
+            0% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(168, 85, 247, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); }
+        }
+
+        .off-path-alert {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(220, 38, 38, 0.95);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 99px;
+            font-weight: 700;
+            z-index: 1000;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            pointer-events: none;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        .off-path-alert.hidden {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-20px);
+        }
     </style>
 </head>
 <body>
@@ -539,7 +608,12 @@
                 <form id="routeForm">
                     <div class="field-grid">
                         <div class="field">
-                            <label for="start">From</label>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                <label for="start">From</label>
+                                <button type="button" class="geo-btn" id="geoBtn" title="Detect my current location">
+                                    <i class="fa-solid fa-location-crosshairs"></i> Use My Location
+                                </button>
+                            </div>
                             <select id="start" required>
                                 <option value="" disabled selected>Select starting point</option>
                                 {% for loc in locations %}
@@ -597,7 +671,11 @@
             </section>
         </aside>
 
-        <section class="map-panel">
+        <section class="map-panel" style="position: relative;">
+            <div id="offPathAlert" class="off-path-alert hidden">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <span id="alertText">You are off path. Recalculating...</span>
+            </div>
             <div class="map-toolbar">
                 <div>
                     <h2>Campus Map</h2>
@@ -606,6 +684,7 @@
                 <div class="legend">
                     <span class="legend-item"><span class="legend-dot" style="background:#ea580c"></span> Landmark</span>
                     <span class="legend-item"><span class="legend-dot" style="background:#1d4ed8"></span> Place</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#a855f7"></span> Your Location</span>
                     <span class="legend-item"><span class="legend-dot" style="background:#16a34a"></span> Route options</span>
                 </div>
             </div>
@@ -624,6 +703,11 @@
         let labelEntries = [];
         let currentRoutes = [];
         let activeRouteIndex = null;
+        let userMarker = null;
+        let watchId = null;
+        let lastUserPos = null;
+        let traversedLayer = null;
+        let remainingLayer = null;
 
         const routeChoices = document.getElementById('routeChoices');
         const steps = document.getElementById('steps');
@@ -700,6 +784,8 @@
         function drawRoutes() {
             routeGroup.clearLayers();
             endpointGroup.clearLayers();
+            if (traversedLayer) traversedLayer.remove();
+            if (remainingLayer) remainingLayer.remove();
 
             [...currentRoutes].reverse().forEach((route) => {
                 const index = currentRoutes.findIndex(item => item.id === route.id);
@@ -713,22 +799,27 @@
                     : 0;
                 const routePath = activeRouteIndex === null ? offsetPath(route.path, previewOffset) : route.path;
 
-                L.polyline(routePath, {
-                    color: '#ffffff',
-                    weight: selected ? 12 : 9,
-                    opacity: 0.96,
-                    lineCap: 'round',
-                    lineJoin: 'round'
-                }).addTo(routeGroup);
+                // Live Navigation path handling
+                if (selected && lastUserPos) {
+                    updateLivePath(routePath, route.color);
+                } else {
+                    L.polyline(routePath, {
+                        color: '#ffffff',
+                        weight: selected ? 12 : 9,
+                        opacity: 0.96,
+                        lineCap: 'round',
+                        lineJoin: 'round'
+                    }).addTo(routeGroup);
 
-                L.polyline(routePath, {
-                    color: route.color,
-                    weight: selected ? 7 : 5,
-                    opacity: selected ? 0.98 : 0.9,
-                    lineCap: selected ? 'round' : 'butt',
-                    lineJoin: 'round',
-                    dashArray: selected ? null : previewDash(index)
-                }).addTo(routeGroup);
+                    L.polyline(routePath, {
+                        color: route.color,
+                        weight: selected ? 7 : 5,
+                        opacity: selected ? 0.98 : 0.9,
+                        lineCap: selected ? 'round' : 'butt',
+                        lineJoin: 'round',
+                        dashArray: selected ? null : previewDash(index)
+                    }).addTo(routeGroup);
+                }
             });
 
             if (activeRouteIndex === null || !currentRoutes[activeRouteIndex]) {
@@ -754,6 +845,113 @@
                 fillColor: selectedRoute.color,
                 fillOpacity: 1
             }).bindTooltip('Destination', { permanent: true, direction: 'right', offset: [12, 0], className: 'map-label landmark-label' }).addTo(endpointGroup);
+        }
+
+        function updateLivePath(fullPath, routeColor) {
+            if (!lastUserPos || !fullPath.length) return;
+
+            const snap = findSnapPoint(lastUserPos, fullPath);
+            const segmentIdx = snap.index;
+            const t = snap.t;
+
+            const pastCoords = fullPath.slice(0, segmentIdx + 1);
+            const futureCoords = fullPath.slice(segmentIdx + 1);
+            
+            // The exact snap point
+            const snapPoint = [
+                fullPath[segmentIdx][0] + (fullPath[segmentIdx+1][0] - fullPath[segmentIdx][0]) * t,
+                fullPath[segmentIdx][1] + (fullPath[segmentIdx+1][1] - fullPath[segmentIdx][1]) * t
+            ];
+
+            pastCoords.push(snapPoint);
+            futureCoords.unshift(snapPoint);
+
+            // Traversed path (faded)
+            L.polyline(pastCoords, {
+                color: '#94a3b8',
+                weight: 7,
+                opacity: 0.4,
+                lineCap: 'round',
+                lineJoin: 'round',
+                dashArray: '4 8'
+            }).addTo(routeGroup);
+
+            // Remaining path (bright)
+            L.polyline(futureCoords, {
+                color: '#ffffff',
+                weight: 12,
+                opacity: 0.96,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(routeGroup);
+
+            L.polyline(futureCoords, {
+                color: routeColor,
+                weight: 7,
+                opacity: 1,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(routeGroup);
+            
+            // Snap the purple marker to the path if close
+            if (snap.dist < 25) {
+                userMarker?.setLatLng(snapPoint);
+            } else {
+                userMarker?.setLatLng(lastUserPos);
+                showOffPathAlert("You are off path.");
+            }
+        }
+
+        function findSnapPoint(pos, path) {
+            let minDist = Infinity;
+            let bestIdx = 0;
+            let bestT = 0;
+
+            for (let i = 0; i < path.length - 1; i++) {
+                const { dist, t } = getPointSegmentDistance(pos, path[i], path[i+1]);
+                if (dist < minDist) {
+                    minDist = dist;
+                    bestIdx = i;
+                    bestT = t;
+                }
+            }
+            return { index: bestIdx, t: bestT, dist: minDist };
+        }
+
+        function getPointSegmentDistance(p, a, b) {
+            const lat1 = a[0], lon1 = a[1];
+            const lat2 = b[0], lon2 = b[1];
+            const px = p[0], py = p[1];
+
+            const dx = lat2 - lat1;
+            const dy = lon2 - lon1;
+            if (dx === 0 && dy === 0) return { dist: distanceInMeters(p, a), t: 0 };
+
+            let t = ((px - lat1) * dx + (py - lon1) * dy) / (dx * dx + dy * dy);
+            t = Math.max(0, Math.min(1, t));
+            const proj = [lat1 + t * dx, lon1 + t * dy];
+            return { dist: distanceInMeters(p, proj), t };
+        }
+
+        function distanceInMeters(p1, p2) {
+            const R = 6371000;
+            const dLat = (p2[0] - p1[0]) * Math.PI / 180;
+            const dLon = (p2[1] - p1[1]) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(p1[0] * Math.PI / 180) * Math.cos(p2[0] * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function showOffPathAlert(text) {
+            const alert = document.getElementById('offPathAlert');
+            document.getElementById('alertText').textContent = text;
+            alert.classList.remove('hidden');
+        }
+
+        function hideOffPathAlert() {
+            document.getElementById('offPathAlert').classList.add('hidden');
         }
 
         function renderSteps(route) {
@@ -912,6 +1110,52 @@
             end.value = temp;
         });
 
+        document.getElementById('geoBtn').addEventListener('click', () => {
+            const geoBtn = document.getElementById('geoBtn');
+            const startSelect = document.getElementById('start');
+
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser.');
+                return;
+            }
+
+            geoBtn.classList.add('loading');
+            geoBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Detecting...';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude.toFixed(6);
+                    const lon = position.coords.longitude.toFixed(6);
+                    const coordVal = `${lat},${lon}`;
+                    
+                    // Check if option already exists
+                    let option = Array.from(startSelect.options).find(o => o.value === coordVal);
+                    if (!option) {
+                        option = document.createElement('option');
+                        option.value = coordVal;
+                        option.textContent = "Your Current Location";
+                        startSelect.appendChild(option);
+                    }
+                    
+                    startSelect.value = coordVal;
+                    geoBtn.classList.remove('loading');
+                    geoBtn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> Use My Location';
+                    
+                    // Start Live Tracking
+                    startLiveTracking();
+                },
+                (error) => {
+                    console.error('Geolocation error:', error);
+                    let msg = 'Unable to retrieve your location.';
+                    if (error.code === error.PERMISSION_DENIED) msg = 'Location access denied.';
+                    alert(msg);
+                    geoBtn.classList.remove('loading');
+                    geoBtn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> Use My Location';
+                },
+                { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+            );
+        });
+
         document.getElementById('backBtn').addEventListener('click', () => {
             activeRouteIndex = null;
             showRoutesState();
@@ -960,6 +1204,49 @@
                 goBtn.textContent = 'Show Routes';
             }
         });
+
+        function startLiveTracking() {
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+
+            watchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const pos = [position.coords.latitude, position.coords.longitude];
+                    lastUserPos = pos;
+                    
+                    if (!userMarker) {
+                        userMarker = L.marker(pos, {
+                            icon: L.divIcon({
+                                className: 'user-location-marker',
+                                iconSize: [18, 18],
+                                iconAnchor: [9, 9]
+                            }),
+                            zIndexOffset: 1000
+                        }).addTo(map);
+                    } else {
+                        userMarker.setLatLng(pos);
+                    }
+
+                    // Check if near campus
+                    const campusCenter = [9.883, 78.081];
+                    if (distanceInMeters(pos, campusCenter) > 1000) {
+                        showOffPathAlert("You are outside the mapped campus area.");
+                    } else {
+                        hideOffPathAlert();
+                    }
+
+                    if (activeRouteIndex !== null) {
+                        const route = currentRoutes[activeRouteIndex];
+                        const distToDest = distanceInMeters(pos, route.path[route.path.length-1]);
+                        if (distToDest < 15) {
+                            showOffPathAlert("You have arrived at your destination!");
+                        }
+                        drawRoutes();
+                    }
+                },
+                (err) => console.error(err),
+                { enableHighAccuracy: true, maximumAge: 0 }
+            );
+        }
 
         resetRouteUI();
         init();

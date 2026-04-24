@@ -1068,13 +1068,34 @@ def map_data():
 @app.route("/route", methods=["POST"])
 def route():
     data = request.json or {}
-    requested_start = normalize_name(data.get("start"))
-    requested_end = normalize_name(data.get("end"))
+    raw_start = data.get("start", "")
+    raw_end = data.get("end", "")
 
     points, _, metadata, ways_data = parse_osm(OSM_FILE)
     display_lookup = {display_name(name).lower(): name for name in points}
-    start_name = display_lookup.get(requested_start.lower(), requested_start)
-    end_name = display_lookup.get(requested_end.lower(), requested_end)
+
+    # Handle Source as Coordinates
+    if "," in raw_start and any(c.isdigit() for c in raw_start):
+        try:
+            lat_s, lon_s = raw_start.split(",")
+            start_coords = (float(lat_s), float(lon_s))
+            start_name = "Your Location"
+            points[start_name] = start_coords
+            metadata[start_name] = {
+                "is_landmark": False,
+                "routing_landmark": False,
+                "routing_only": False,
+                "type": "custom",
+                "display_name": "Your Location",
+                "label_tier": 0
+            }
+        except (ValueError, TypeError):
+            start_name = display_lookup.get(normalize_name(raw_start).lower(), normalize_name(raw_start))
+    else:
+        start_name = display_lookup.get(normalize_name(raw_start).lower(), normalize_name(raw_start))
+
+    # Destination handling (remains name-based)
+    end_name = display_lookup.get(normalize_name(raw_end).lower(), normalize_name(raw_end))
 
     if start_name == end_name:
         return jsonify({"error": "Already at destination"}), 200
