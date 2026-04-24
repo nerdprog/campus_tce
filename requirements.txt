@@ -51,7 +51,6 @@ PyYAML==6.0.3
 requests==2.33.1
 rich==14.3.3
 scikit-learn==1.8.0
-gunicorn==21.2.0
 scipy==1.17.1
 seaborn==0.13.2
 setuptools==82.0.1
