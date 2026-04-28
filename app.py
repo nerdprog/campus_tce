@@ -28,6 +28,10 @@ BLACKLIST = [
     "t s srinivasan",
 ]
 
+FORBIDDEN_ROUTING_ROADS = {
+    "tce avaniyapuram road",
+}
+
 KML_NAME_ALIASES = {
     "TCE Parking Lot": "TCE Parking",
     "TCE LIBRARY": "Library",
@@ -50,6 +54,7 @@ DISPLAY_NAME_OVERRIDES = {
 }
 
 KML_ALWAYS_LANDMARKS = {
+    "Food Court",
     "Fountain",
     "TCE Name Board",
     "Saraswathi statue",
@@ -78,6 +83,14 @@ START_NEIGHBORHOOD_AVOID_RADIUS = 35
 MANUAL_SHORTCUTS = [
     ((9.8841222, 78.0807678), (9.8837742, 78.0807706)),
 ]
+TCE_NAME_BOARD_DISPLAY_CORRIDOR = [
+    (9.8832028, 78.0810537),
+    (9.8832007, 78.0813492),
+    (9.8832004, 78.0813917),
+    (9.8831979, 78.0817539),
+    (9.8831961, 78.081802),
+    (9.8829689, 78.0817957),
+]
 MAJOR_LABELS = {
     "Library",
     "Main Building",
@@ -91,6 +104,7 @@ MAJOR_LABELS = {
 }
 MEDIUM_LABEL_KEYWORDS = ("Department", "Auditorium", "Hostel", "Gate", "Library", "Building", "Canteen")
 FRIENDLY_REFERENCE_POINTS = {
+    "Food Court",
     "Library",
     "Main Building",
     "Fountain",
@@ -101,6 +115,16 @@ FRIENDLY_REFERENCE_POINTS = {
     "Placement Building",
     "Trotters Ground",
 }
+VISUAL_CONFIRMATION_KEYWORDS = (
+    "auditorium",
+    "building",
+    "canteen",
+    "department",
+    "food court",
+    "fountain",
+    "library",
+    "statue",
+)
 INTERNAL_PLACE_KEYWORDS = (
     "hall",
     "block",
@@ -113,6 +137,8 @@ INTERNAL_PLACE_KEYWORDS = (
 MIN_TURN_SEGMENT_METERS = 15
 MIN_BEND_SEGMENT_METERS = 28
 MIN_INSTRUCTION_SPACING_METERS = 18
+TURN_LANDMARK_RADIUS = 16
+MIN_CONFIRMATION_LANDMARK_LEG_METERS = 40
 
 
 def distance(a, b):
@@ -141,6 +167,11 @@ def display_name(name):
 
 def ordinal_name(index):
     return {1: "first", 2: "second", 3: "third", 4: "fourth"}.get(index, f"{index}th")
+
+
+def is_forbidden_routing_road(name):
+    cleaned = normalize_name(name).lower()
+    return any(forbidden in cleaned for forbidden in FORBIDDEN_ROUTING_ROADS)
 
 
 @lru_cache(maxsize=4)
@@ -242,7 +273,7 @@ def parse_osm_cached(file_path, osm_mtime, kml_mtime):
 
             if "highway" in tags:
                 coords = [nodes[ref] for ref in way_nodes if ref in nodes]
-                if coords:
+                if coords and not is_forbidden_routing_road(tags.get("name", "")):
                     ways_data.append({"type": "highway", "coords": coords, "name": tags.get("name", "Path")})
 
                 if "Architecture Dept" in tags.get("name", "") and "Architecture Dept" not in points and coords:
@@ -732,12 +763,13 @@ def get_poi_near(pt, points, metadata, tol=5, include_routing_only=False):
 def is_instruction_landmark(name, metadata, destination_name=None):
     meta = metadata.get(name, {})
     display = meta.get("display_name", name)
-    if not (meta.get("routing_landmark") or display in FRIENDLY_REFERENCE_POINTS):
+    lowered = display.lower()
+    is_visual_confirmation = any(keyword in lowered for keyword in VISUAL_CONFIRMATION_KEYWORDS)
+    if not (meta.get("routing_landmark") or display in FRIENDLY_REFERENCE_POINTS or is_visual_confirmation):
         return False
-    lowered = name.lower()
     if destination_name and name == destination_name:
         return False
-    if any(word in lowered for word in INTERNAL_PLACE_KEYWORDS) and not meta.get("is_landmark"):
+    if any(word in name.lower() for word in INTERNAL_PLACE_KEYWORDS) and not (meta.get("is_landmark") or is_visual_confirmation):
         return False
     return True
 
@@ -781,6 +813,57 @@ def landmark_before_turn(path, turn_index, points, metadata, used_landmarks, des
                     "index": idx,
                     "t": t
                 }
+
+    return best_info
+
+
+def confirmation_landmark_on_leg(path, start_index, turn_index, points, metadata, used_landmarks, destination_name=None):
+    best_info = None
+    best_score = float("inf")
+
+    for idx in range(start_index, max(start_index + 1, turn_index)):
+        p1 = path[idx]
+        p2 = path[idx + 1]
+        for name, coords in points.items():
+            if name in used_landmarks or not is_instruction_landmark(name, metadata, destination_name):
+                continue
+            dist, t = point_segment_distance(coords, p1, p2)
+            if dist >= LANDMARK_SEARCH_RADIUS or not 0.08 <= t <= 0.92:
+                continue
+            dist_from_leg_start = path_distance(path[start_index : idx + 1]) + distance(p1, coords) * t
+            dist_to_turn = path_distance(path[idx : turn_index + 1])
+            if dist_from_leg_start < 15 or dist_to_turn < 20:
+                continue
+            score = dist + abs((dist_from_leg_start / max(path_distance(path[start_index : turn_index + 1]), 1)) - 0.55) * 8
+            if score < best_score:
+                best_score = score
+                best_info = {
+                    "name": name,
+                    "side": get_side_of_path(p1, p2, coords),
+                    "index": idx,
+                    "t": t,
+                }
+
+    return best_info
+
+
+def landmark_at_turn(path, turn_index, points, metadata, used_landmarks, destination_name=None):
+    turn_point = path[turn_index]
+    best_info = None
+    best_dist = float("inf")
+
+    for name, coords in points.items():
+        if name in used_landmarks or not is_instruction_landmark(name, metadata, destination_name):
+            continue
+        dist = distance(coords, turn_point)
+        if dist < TURN_LANDMARK_RADIUS and dist < best_dist:
+            best_dist = dist
+            best_info = {
+                "name": name,
+                "side": get_side_of_path(path[turn_index - 1], turn_point, coords),
+                "index": turn_index,
+                "t": 1,
+            }
 
     return best_info
 
@@ -983,23 +1066,16 @@ def build_display_path(path, override=None):
     if not override:
         return list(path)
 
-    simplified = list(path[: override["turn_left_index"] + 1])
-    pivot_indices = [
-        override["library_index"],
-        override["auditorium_index"],
-        override["name_board_turn_index"],
-    ]
-
-    for idx in pivot_indices:
-        point = path[idx]
-        if point != simplified[-1]:
-            simplified.append(point)
+    display_path = list(path[: override["turn_left_index"] + 1])
+    for point in TCE_NAME_BOARD_DISPLAY_CORRIDOR:
+        if distance(display_path[-1], point) > 1:
+            display_path.append(point)
 
     for point in path[override["name_board_turn_index"] + 1 :]:
-        if point != simplified[-1]:
-            simplified.append(point)
+        if distance(display_path[-1], point) > 1:
+            display_path.append(point)
 
-    return simplified
+    return display_path
 
 
 def narrate_route(path, points, metadata, graph, start_name=None, end_name=None, route_index=None):
@@ -1060,7 +1136,34 @@ def narrate_route_segment(path, points, metadata, graph, start_name=None, end_na
     for maneuver in maneuvers:
         turn_index = maneuver["index"]
         leg_start_idx = maneuver["segment_start_idx"]
-        l_info = landmark_before_turn(path, turn_index, points, metadata, used_landmarks, destination_name=end_poi)
+        leg_distance = path_distance(path[leg_start_idx : turn_index + 1])
+        turn_landmark = landmark_at_turn(path, turn_index, points, metadata, used_landmarks, destination_name=end_poi)
+        confirmation_landmark = None
+        if turn_landmark and leg_distance >= MIN_CONFIRMATION_LANDMARK_LEG_METERS:
+            confirmation_landmark = confirmation_landmark_on_leg(
+                path,
+                leg_start_idx,
+                turn_index,
+                points,
+                metadata,
+                used_landmarks | {turn_landmark["name"]},
+                destination_name=end_poi,
+            )
+
+        if turn_landmark and confirmation_landmark:
+            used_landmarks.update({confirmation_landmark["name"], turn_landmark["name"]})
+            dist_to_confirmation = round(path_distance(path[leg_start_idx : confirmation_landmark["index"] + 1]))
+            if dist_to_confirmation > 3:
+                instructions.append(f"Walk straight for {dist_to_confirmation} meters")
+            instructions.append(
+                f"You will see {display_name(confirmation_landmark['name'])} on your {confirmation_landmark['side']}; "
+                f"continue and {maneuver['action']} near the {display_name(turn_landmark['name'])}"
+            )
+            continue
+
+        l_info = turn_landmark
+        if not l_info:
+            l_info = landmark_before_turn(path, turn_index, points, metadata, used_landmarks, destination_name=end_poi)
         if not l_info:
             l_info = fallback_landmark_near_segment(path, leg_start_idx, turn_index, points, metadata, used_landmarks, destination_name=end_poi)
 
@@ -1070,6 +1173,9 @@ def narrate_route_segment(path, points, metadata, graph, start_name=None, end_na
             dist_from_landmark = round(path_distance(path[l_info["index"] : turn_index + 1]))
             if dist_to_landmark > 3:
                 instructions.append(f"Walk straight for {dist_to_landmark} meters")
+            if l_info["index"] == turn_index:
+                instructions.append(f"{maneuver['action']} near the {display_name(l_info['name'])}")
+                continue
             instructions.append(f"You will see {display_name(l_info['name'])} on your {l_info['side']}")
             if dist_from_landmark > 5:
                 instructions.append(f"Continue straight for {dist_from_landmark} meters")

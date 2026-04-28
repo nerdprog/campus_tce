@@ -371,7 +371,7 @@
         let labelLayer;
         let labelEntries = [];
         let currentRoutes = [];
-        let activeRouteIndex = null;
+        let activeRouteId = null;
         let userMarker = null;
         let watchId = null;
         let lastUserPos = null;
@@ -398,31 +398,6 @@
             return `${Math.round(distance)} m`;
         }
 
-        function previewDash(index) {
-            return [null, '14 10', '5 12'][index] || '8 10';
-        }
-
-        function offsetPath(path, offsetMeters) {
-            if (!offsetMeters || path.length < 2) return path;
-
-            return path.map((point, index) => {
-                const prev = path[Math.max(0, index - 1)];
-                const next = path[Math.min(path.length - 1, index + 1)];
-                const dy = next[0] - prev[0];
-                const dx = next[1] - prev[1];
-                const length = Math.hypot(dx, dy) || 1;
-                const perpLat = -dx / length;
-                const perpLon = dy / length;
-                const metersPerLat = 111320;
-                const metersPerLon = 111320 * Math.cos((point[0] * Math.PI) / 180 || 0);
-
-                return [
-                    point[0] + (perpLat * offsetMeters) / metersPerLat,
-                    point[1] + (perpLon * offsetMeters) / metersPerLon
-                ];
-            });
-        }
-
         function showRoutesState() {
             routesView.classList.remove('hidden');
             detailsView.classList.add('hidden');
@@ -447,7 +422,7 @@
 
         function resetRouteUI(message = 'Enter locations to see routes.') {
             currentRoutes = [];
-            activeRouteIndex = null;
+            activeRouteId = null;
             routesView.classList.add('hidden');
             detailsView.classList.add('hidden');
             routeChoices.innerHTML = `<div class="empty-state">${message}</div>`;
@@ -465,16 +440,12 @@
             if (remainingLayer) remainingLayer.remove();
 
             [...currentRoutes].reverse().forEach((route) => {
-                const index = currentRoutes.findIndex(item => item.id === route.id);
-                const selected = index === activeRouteIndex;
-                if (activeRouteIndex !== null && !selected) {
+                const selected = route.id === activeRouteId;
+                if (activeRouteId !== null && !selected) {
                     return;
                 }
 
-                const previewOffset = activeRouteIndex === null
-                    ? (index - ((currentRoutes.length - 1) / 2)) * 2.8
-                    : 0;
-                const routePath = activeRouteIndex === null ? offsetPath(route.path, previewOffset) : route.path;
+                const routePath = route.path;
 
                 // Live Navigation path handling
                 if (selected && lastUserPos) {
@@ -492,18 +463,18 @@
                         color: route.color,
                         weight: selected ? 7 : 5,
                         opacity: selected ? 0.98 : 0.9,
-                        lineCap: selected ? 'round' : 'butt',
+                        lineCap: 'round',
                         lineJoin: 'round',
-                        dashArray: selected ? null : previewDash(index)
+                        dashArray: null
                     }).addTo(routeGroup);
                 }
             });
 
-            if (activeRouteIndex === null || !currentRoutes[activeRouteIndex]) {
+            const selectedRoute = currentRoutes.find(route => route.id === activeRouteId);
+            if (!selectedRoute) {
                 return;
             }
 
-            const selectedRoute = currentRoutes[activeRouteIndex];
             const start = selectedRoute.start_marker || selectedRoute.path[0];
             const end = selectedRoute.end_marker || selectedRoute.path[selectedRoute.path.length - 1];
 
@@ -654,10 +625,12 @@
         }
 
         function selectRoute(index) {
-            activeRouteIndex = index;
+            const selectedRoute = currentRoutes[index];
+            if (!selectedRoute) return;
+            activeRouteId = selectedRoute.id;
             renderRouteChoices();
             drawRoutes();
-            renderSteps(currentRoutes[index]);
+            renderSteps(selectedRoute);
             showDetailsState();
         }
 
@@ -667,7 +640,7 @@
                 const rankLabel = index === 0 ? 'Shortest' : `Option ${index + 1}`;
                 const button = document.createElement('button');
                 button.type = 'button';
-                button.className = `route-option ${index === activeRouteIndex ? 'active' : ''}`;
+                button.className = `route-option ${route.id === activeRouteId ? 'active' : ''}`;
                 button.style.padding = '14px';
                 button.style.borderRadius = '18px';
                 button.innerHTML = `
@@ -846,7 +819,7 @@
         });
 
         document.getElementById('backBtn').addEventListener('click', () => {
-            activeRouteIndex = null;
+            activeRouteId = null;
             showRoutesState();
         });
 
@@ -878,7 +851,7 @@
                     start: data.start,
                     end: data.end
                 }));
-                activeRouteIndex = null;
+                activeRouteId = null;
 
                 document.getElementById('routesIntro').textContent = `${data.start} to ${data.end} - choose the route you prefer.`;
                 renderRouteChoices();
@@ -923,8 +896,8 @@
                         hideOffPathAlert();
                     }
 
-                    if (activeRouteIndex !== null) {
-                        const route = currentRoutes[activeRouteIndex];
+                    const route = currentRoutes.find(item => item.id === activeRouteId);
+                    if (route) {
                         const distToDest = distanceInMeters(pos, route.path[route.path.length-1]);
                         if (distToDest < 15) {
                             showOffPathAlert("You have arrived at your destination!");
