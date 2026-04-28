@@ -9,16 +9,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
         :root {
-            --surface: rgba(255, 250, 242, 0.88);
-            --surface-strong: rgba(255, 255, 255, 0.96);
-            --ink: #1f2937;
-            --muted: #5b6473;
-            --accent: #e85d04;
-            --line: rgba(31, 41, 55, 0.1);
-            --shadow: 0 22px 50px rgba(72, 44, 19, 0.14);
-            --route-a: #16a34a;
-            --route-b: #f97316;
-            --route-c: #dc2626;
+            --surface: rgba(255, 255, 255, 0.95);
+            --ink: #1e293b;
+            --muted: #64748b;
+            --accent: #f97316;
+            --shadow: 0 10px 25px rgba(0,0,0,0.1);
         }
 
         * { box-sizing: border-box; }
@@ -29,22 +24,7 @@
             font-family: 'Space Grotesk', sans-serif;
             color: var(--ink);
             overflow: hidden;
-            background:
-                radial-gradient(circle at top left, rgba(232, 93, 4, 0.16), transparent 24%),
-                radial-gradient(circle at bottom right, rgba(37, 99, 235, 0.12), transparent 26%),
-                linear-gradient(180deg, #fff9ef 0%, #f5ecde 54%, #f0e4d2 100%);
-        }
-
-        body::before {
-            content: "";
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            background-image:
-                linear-gradient(rgba(255,255,255,0.35) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.35) 1px, transparent 1px);
-            background-size: 42px 42px;
-            opacity: 0.22;
+            background: #f8fafc;
         }
 
         .app-shell {
@@ -57,13 +37,12 @@
             gap: 18px;
         }
 
-        .panel,
-        .map-panel {
+        .panel, .map-panel {
             background: var(--surface);
-            border: 1px solid rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(12px);
+            border-radius: 24px;
             box-shadow: var(--shadow);
-            backdrop-filter: blur(18px);
-            border-radius: 30px;
+            border: 1px solid #e2e8f0;
         }
 
         .panel {
@@ -74,524 +53,171 @@
             min-height: calc(100vh - 24px);
             max-height: calc(100vh - 24px);
             overflow-y: auto;
-            overscroll-behavior: contain;
-            scrollbar-gutter: stable;
-            background:
-                linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,246,236,0.92)),
-                radial-gradient(circle at top right, rgba(249, 115, 22, 0.12), transparent 32%);
-        }
-
-        .panel::-webkit-scrollbar {
-            width: 10px;
-        }
-
-        .panel::-webkit-scrollbar-thumb {
-            background: rgba(194, 65, 12, 0.28);
-            border-radius: 999px;
-            border: 2px solid rgba(255,255,255,0.7);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .brand-card {
-            border-radius: 28px;
-            padding: 24px;
-            background:
-                radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 28%),
-                linear-gradient(145deg, #102542 0%, #244c6a 46%, #f97316 130%);
-            color: #fffdf8;
-            position: relative;
-            overflow: hidden;
-            min-height: 220px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            border-radius: 20px;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            color: #f8fafc;
         }
 
-        .brand-card::after {
-            content: "";
-            position: absolute;
-            inset: auto -24px -38px auto;
-            width: 170px;
-            height: 170px;
-            background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 68%);
-        }
-
-        .brand-card::before {
-            content: "";
-            position: absolute;
-            inset: 18px 18px auto auto;
-            width: 72px;
-            height: 72px;
-            border-radius: 24px;
-            background: rgba(255,255,255,0.08);
-            transform: rotate(14deg);
-        }
-
-        .eyebrow {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.78rem;
-            text-transform: uppercase;
-            letter-spacing: 0.16em;
-            color: rgba(255,255,255,0.78);
-        }
-
-        h1, h2, h3 { margin: 0; font-family: 'Sora', sans-serif; }
-
-        .brand-card p {
-            margin: 14px 0 0;
-            max-width: 28ch;
-            color: rgba(255,255,255,0.84);
-            line-height: 1.6;
-            font-size: 1.02rem;
-        }
+        .brand-card h1 { font-size: 1.3rem; margin: 0 0 6px 0; font-weight: 800; }
+        .brand-card p { font-size: 0.85rem; margin: 0; opacity: 0.8; line-height: 1.5; }
 
         .card {
-            background:
-                linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,244,238,0.96));
-            border: 1px solid rgba(191, 124, 69, 0.14);
-            border-radius: 24px;
+            background: #fff;
+            border: 1px solid #f1f5f9;
+            border-radius: 20px;
             padding: 18px;
-            box-shadow: 0 18px 30px rgba(101, 67, 33, 0.08);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
         .hidden { display: none !important; }
 
-        .field-grid {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            gap: 14px;
-            align-items: end;
-        }
-
-        .field {
+        .field-stack {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 12px;
+            position: relative;
+            padding-right: 42px;
         }
 
-        .field label {
-            font-size: 0.78rem;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            color: var(--muted);
-        }
-
+        .field { display: flex; flex-direction: column; gap: 4px; }
+        .field label { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: var(--muted); }
         .field select {
             width: 100%;
-            border: 1px solid rgba(148, 163, 184, 0.28);
-            border-radius: 18px;
-            padding: 15px 16px;
-            font: inherit;
-            background: linear-gradient(180deg, #ffffff, #fff9f2);
-            color: var(--ink);
-            outline: none;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 0.9rem;
+            background: #fff;
+            transition: all 0.2s;
         }
 
-        .field select:focus,
-        .icon-btn:focus,
-        .primary-btn:focus,
-        .secondary-btn:focus,
-        .route-option:focus {
-            border-color: rgba(232, 93, 4, 0.45);
-            box-shadow: 0 0 0 4px rgba(232, 93, 4, 0.12);
-        }
+        .field select:focus { border-color: var(--accent); outline: none; }
 
-        .icon-btn,
-        .primary-btn,
-        .secondary-btn {
-            border: none;
-            cursor: pointer;
-            font: inherit;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        .swap-container {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
         }
 
         .icon-btn {
-            width: 52px;
-            height: 52px;
-            border-radius: 18px;
-            background: linear-gradient(135deg, #fff7ed, #f3f4f6);
-            color: #9a3412;
-            align-self: center;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
-        }
-
-        .primary-btn,
-        .secondary-btn {
-            width: 100%;
-            padding: 16px 18px;
-            border-radius: 18px;
-            font-weight: 700;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: #f1f5f9;
+            border: none;
+            color: var(--ink);
+            cursor: pointer;
+            display: grid;
+            place-items: center;
         }
 
         .primary-btn {
-            margin-top: 14px;
-            color: white;
-            background: linear-gradient(135deg, #f97316, #d9480f);
-            box-shadow: 0 18px 28px rgba(217, 72, 15, 0.28);
-        }
-
-        .secondary-btn {
-            color: #334155;
-            background: linear-gradient(135deg, #f8fafc, #e5e7eb);
-            border: 1px solid rgba(148, 163, 184, 0.22);
-        }
-
-        .geo-btn {
-            background: rgba(232, 93, 4, 0.08);
-            border: 1px solid rgba(232, 93, 4, 0.15);
-            color: var(--accent);
-            cursor: pointer;
-            font-size: 0.72rem;
+            margin-top: 12px;
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            background: var(--accent);
+            color: #fff;
             font-weight: 700;
-            padding: 4px 10px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(249, 115, 22, 0.2);
         }
 
-        .geo-btn:hover {
-            background: rgba(232, 93, 4, 0.14);
-            transform: translateY(-1px);
-        }
+        .stat-tile { background: #f8fafc; border-radius: 12px; padding: 12px; border: 1px solid #e2e8f0; }
+        .stat-label { display: block; font-size: 0.6rem; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+        .stat-value { font-weight: 800; font-size: 1.1rem; }
 
-        .geo-btn:active {
-            transform: translateY(0);
-        }
-
-        .geo-btn.loading {
-            opacity: 0.7;
-            cursor: wait;
-        }
-
-        .route-stack,
-        .steps-list {
-            display: flex;
-            flex-direction: column;
+        .step {
+            display: grid;
+            grid-template-columns: 36px 1fr;
             gap: 12px;
-        }
-
-        .section-head {
-            display: flex;
             align-items: start;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 14px;
+            background: #fff;
+            border: 1px solid #f1f5f9;
+            padding: 12px;
+            border-radius: 14px;
         }
 
-        .section-head p {
-            margin: 6px 0 0;
-            color: var(--muted);
+        .step-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            background: rgba(249, 115, 22, 0.1);
+            color: var(--accent);
         }
 
         .route-option {
             width: 100%;
-            border: 1px solid rgba(148, 163, 184, 0.16);
-            background: linear-gradient(180deg, #ffffff, #fffaf5);
-            border-radius: 20px;
-            padding: 16px;
+            border: 1.5px solid #e2e8f0;
+            background: #fff;
+            border-radius: 16px;
+            padding: 14px;
             cursor: pointer;
-            text-align: left;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 14px;
-            box-shadow: 0 10px 18px rgba(148, 163, 184, 0.08);
+            transition: all 0.2s;
         }
 
-        .route-option.active {
-            border-color: rgba(232, 93, 4, 0.4);
-            box-shadow: 0 14px 28px rgba(232, 93, 4, 0.12);
-        }
-
-        .route-meta {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .route-swatch {
-            width: 14px;
-            height: 14px;
-            border-radius: 999px;
-            flex-shrink: 0;
-            box-shadow: 0 0 0 4px rgba(255,255,255,0.9);
-        }
-
-        .route-title {
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .route-subtitle,
-        .muted {
-            color: var(--muted);
-            font-size: 0.94rem;
-        }
-
-        .badge-chip {
-            border-radius: 999px;
-            padding: 8px 10px;
-            background: rgba(31, 41, 55, 0.06);
-            font-size: 0.82rem;
-            font-weight: 700;
-            white-space: nowrap;
-        }
-
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .stat-tile {
-            border-radius: 20px;
-            padding: 15px;
-            background: linear-gradient(145deg, #fff8f1, #f8fafc);
-            border: 1px solid rgba(191, 124, 69, 0.16);
-        }
-
-        .stat-label {
-            display: block;
-            font-size: 0.74rem;
-            text-transform: uppercase;
-            letter-spacing: 0.13em;
-            color: var(--muted);
-            margin-bottom: 6px;
-        }
-
-        .stat-value {
-            font-family: 'Sora', sans-serif;
-            font-size: 1.2rem;
-            font-weight: 700;
-        }
-
-        .step {
-            display: grid;
-            grid-template-columns: 46px 1fr;
-            gap: 14px;
-            align-items: start;
-            background: linear-gradient(180deg, #ffffff, #fff9f3);
-            border-radius: 22px;
-            border: 1px solid rgba(191, 124, 69, 0.14);
-            padding: 16px;
-            box-shadow: 0 14px 22px rgba(148, 163, 184, 0.08);
-        }
-
-        .step-icon {
-            width: 46px;
-            height: 46px;
-            border-radius: 16px;
-            display: grid;
-            place-items: center;
-            background: linear-gradient(135deg, rgba(249, 115, 22, 0.18), rgba(255,255,255,0.95));
-            color: var(--accent);
-        }
-
-        .step small {
-            display: block;
-            color: var(--muted);
-            margin-bottom: 4px;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            font-size: 0.68rem;
-        }
-
-        .empty-state {
-            padding: 18px;
-            border-radius: 18px;
-            background: rgba(31, 41, 55, 0.04);
-            color: var(--muted);
-        }
+        .route-option.active { border-color: var(--accent); background: rgba(249, 115, 22, 0.02); }
 
         .map-panel {
             padding: 14px;
             display: flex;
             flex-direction: column;
-            gap: 14px;
-            min-height: calc(100vh - 24px);
-            max-height: calc(100vh - 24px);
-        }
-
-        .map-toolbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            padding: 10px 12px 0;
-            flex-wrap: wrap;
-        }
-
-        .map-toolbar h2 { font-size: 1.15rem; }
-        .toolbar-note { color: var(--muted); font-size: 0.93rem; }
-
-        .legend {
-            display: flex;
-            flex-wrap: wrap;
             gap: 10px;
+            min-height: calc(100vh - 24px);
         }
 
-        .legend-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.84);
-            border: 1px solid rgba(31, 41, 55, 0.08);
-            font-size: 0.86rem;
-        }
+        .map-toolbar h2 { font-size: 1.2rem; font-weight: 800; margin: 0; }
 
-        .legend-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 999px;
-        }
-
-        #map {
-            flex: 1;
-            min-height: 420px;
-            border-radius: 26px;
-            overflow: hidden;
-        }
-
-        .leaflet-container { font-family: 'Space Grotesk', sans-serif; }
-
-        .poi-marker,
-        .landmark-marker {
-            border-radius: 999px;
-            border: 2px solid rgba(255, 255, 255, 0.92);
-            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
-        }
-
-        .poi-marker {
-            width: 12px;
-            height: 12px;
-            background: #1d4ed8;
-        }
-
-        .landmark-marker {
-            width: 14px;
-            height: 14px;
-            background: #ea580c;
-            animation: markerPulse 2.4s infinite;
-        }
-
-        .label-anchor {
-            width: 1px;
-            height: 1px;
-            opacity: 0;
-        }
-
-        @keyframes markerPulse {
-            0% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.26); }
-            70% { box-shadow: 0 0 0 12px rgba(234, 88, 12, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0); }
-        }
+        #map { flex: 1; border-radius: 18px; overflow: hidden; }
 
         .map-label {
-            background: rgba(255, 255, 255, 0.92);
-            border: 1px solid rgba(31, 41, 55, 0.08);
-            border-radius: 999px;
-            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.1);
-            color: #111827;
-            font-size: 11px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 99px;
+            font-size: 10px;
             font-weight: 700;
-            padding: 4px 10px;
-            white-space: nowrap;
+            padding: 3px 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
-        .map-label.landmark-label {
-            background: rgba(255, 247, 237, 0.96);
-            color: #9a3412;
-            border-color: rgba(234, 88, 12, 0.22);
-        }
-
-        .leaflet-tooltip-top.map-label::before,
-        .leaflet-tooltip-bottom.map-label::before,
-        .leaflet-tooltip-left.map-label::before,
-        .leaflet-tooltip-right.map-label::before { display: none; }
-
-        #routesView,
-        #detailsView {
-            min-height: 0;
-        }
-
-        #detailsView {
-            flex: 1;
-            overflow: visible;
-        }
-
-        .steps-list {
-            margin-top: 16px;
-            padding-right: 4px;
-        }
-
-        @media (max-width: 1100px) {
-            .app-shell { grid-template-columns: 1fr; }
-            .panel, .map-panel { min-height: auto; }
-            .map-panel { min-height: 58vh; }
-            body { overflow: auto; }
-            .panel, .map-panel { max-height: none; }
-            .panel { overflow: visible; }
-        }
-
-        @media (max-width: 720px) {
-            .app-shell {
-                width: min(100% - 12px, 100%);
-                margin: 6px auto;
-                gap: 12px;
-            }
-
-            .field-grid { grid-template-columns: 1fr; }
-            .icon-btn { width: 100%; height: 48px; }
-            .summary-grid { grid-template-columns: 1fr; }
-            #map { min-height: 56vh; }
-            .map-toolbar { padding: 8px 4px 0; }
-        }
-        .user-location-marker {
-            background: #a855f7;
-            border: 3px solid white;
-            border-radius: 50%;
-            box-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
-            animation: userPulse 2s infinite;
-        }
-
-        @keyframes userPulse {
-            0% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(168, 85, 247, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); }
-        }
+        .landmark-marker { background: #f97316; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 10px rgba(249,115,22,0.4); }
+        .poi-marker { background: #3b82f6; border-radius: 50%; border: 2px solid #fff; }
+        .user-location-marker { background: #a855f7; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 15px rgba(168,85,247,0.5); }
 
         .off-path-alert {
             position: absolute;
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(220, 38, 38, 0.95);
-            color: white;
-            padding: 12px 24px;
+            background: #ef4444;
+            color: #fff;
+            padding: 10px 20px;
             border-radius: 99px;
             font-weight: 700;
             z-index: 1000;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            backdrop-filter: blur(8px);
+            font-size: 0.85rem;
             display: flex;
             align-items: center;
-            gap: 10px;
-            pointer-events: none;
-            transition: opacity 0.3s, transform 0.3s;
+            gap: 8px;
         }
 
-        .off-path-alert.hidden {
-            opacity: 0;
-            transform: translateX(-50%) translateY(-20px);
+        @media (max-width: 1100px) {
+            .app-shell { grid-template-columns: 1fr; }
+            .panel { min-height: auto; max-height: none; }
+            .map-panel { min-height: 50vh; }
+            body { overflow: auto; }
         }
     </style>
 </head>
@@ -599,33 +225,27 @@
     <main class="app-shell">
         <aside class="panel">
             <section class="brand-card">
-                <div class="eyebrow"><i class="fa-solid fa-location-dot"></i> TCE Campus</div>
-                <h1>Smarter campus routing with cleaner flow.</h1>
-                <p>Pick start and destination first. Then compare the best routes, choose one, and view friendly step-by-step guidance.</p>
+                <h1>TCE Campus Navigator</h1>
+                <p>Select your start and destination to find the most efficient routes across campus.</p>
             </section>
 
             <section class="card">
                 <form id="routeForm">
-                    <div class="field-grid">
+                    <div class="field-stack">
                         <div class="field">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-                                <label for="start">From</label>
-                                <button type="button" class="geo-btn" id="geoBtn" title="Detect my current location">
-                                    <i class="fa-solid fa-location-crosshairs"></i> Use My Location
-                                </button>
-                            </div>
+                            <label for="start">Start Location</label>
                             <select id="start" required>
-                                <option value="" disabled selected>Select starting point</option>
+                                <option value="" disabled selected>Select start point</option>
                                 {% for loc in locations %}
                                 <option value="{{ loc }}">{{ loc }}</option>
                                 {% endfor %}
                             </select>
+                            <button type="button" class="geo-btn" id="geoBtn" style="margin-top: 4px; border: none; background: none; font-size: 0.65rem; color: #f97316; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 0;">
+                                <i class="fa-solid fa-location-crosshairs"></i> USE MY CURRENT LOCATION
+                            </button>
                         </div>
-                        <button type="button" class="icon-btn" id="swapBtn" aria-label="Swap start and destination">
-                            <i class="fa-solid fa-right-left"></i>
-                        </button>
                         <div class="field">
-                            <label for="end">To</label>
+                            <label for="end">Destination</label>
                             <select id="end" required>
                                 <option value="" disabled selected>Select destination</option>
                                 {% for loc in locations %}
@@ -633,40 +253,42 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        <div class="swap-container">
+                            <button type="button" class="icon-btn" id="swapBtn" title="Swap locations">
+                                <i class="fa-solid fa-retweet"></i>
+                            </button>
+                        </div>
                     </div>
-                    <button type="submit" class="primary-btn" id="goBtn">Show Routes</button>
+                    <button type="submit" class="primary-btn" id="goBtn">Show Route</button>
                 </form>
             </section>
 
             <section class="card hidden" id="routesView">
                 <div class="section-head">
                     <div>
-                        <h2>Choose a Route</h2>
-                        <p id="routesIntro">Pick one of the shortest route options below.</p>
+                        <h2 style="font-size: 1.1rem; font-weight: 800;">Available Routes</h2>
+                        <p id="routesIntro" style="font-size: 0.85rem; margin-top: 2px;">Select a route to see details.</p>
                     </div>
                 </div>
                 <div id="routeChoices" class="route-stack"></div>
             </section>
 
             <section class="card hidden" id="detailsView">
-                <div class="section-head">
-                    <div>
-                        <h2 id="detailsTitle">Route Details</h2>
-                        <p id="stepsCaption">Selected route instructions will appear here.</p>
-                    </div>
-                    <span class="badge-chip" id="stepCount">0 steps</span>
+                <div class="section-head" style="margin-bottom: 12px;">
+                    <button type="button" id="backBtn" style="border: none; background: #f1f5f9; color: #475569; padding: 8px 12px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-chevron-left"></i> Back
+                    </button>
                 </div>
-                <div class="summary-grid">
-                    <div class="stat-tile">
-                        <span class="stat-label">Selected Route</span>
-                        <span class="stat-value" id="selectedRouteName">-</span>
+                <div class="summary-grid" style="margin-bottom: 12px;">
+                    <div class="stat-tile" style="padding: 12px;">
+                        <span class="stat-label" style="font-size: 0.65rem;">Distance</span>
+                        <span class="stat-value" id="distVal" style="font-size: 1.1rem;">-</span>
                     </div>
-                    <div class="stat-tile">
-                        <span class="stat-label">Distance</span>
-                        <span class="stat-value" id="distVal">-</span>
+                    <div class="stat-tile" style="padding: 12px;">
+                        <span class="stat-label" style="font-size: 0.65rem;">Steps</span>
+                        <span class="stat-value" id="stepCountVal" style="font-size: 1.1rem;">0</span>
                     </div>
                 </div>
-                <button type="button" class="secondary-btn" id="backBtn">Back To Route Options</button>
                 <div id="steps" class="steps-list"></div>
             </section>
         </aside>
@@ -674,19 +296,10 @@
         <section class="map-panel" style="position: relative;">
             <div id="offPathAlert" class="off-path-alert hidden">
                 <i class="fa-solid fa-circle-exclamation"></i>
-                <span id="alertText">You are off path. Recalculating...</span>
+                <span id="alertText">Recalculating...</span>
             </div>
             <div class="map-toolbar">
-                <div>
-                    <h2>Campus Map</h2>
-                    <div class="toolbar-note">Important labels show first, and more names appear as you zoom in.</div>
-                </div>
-                <div class="legend">
-                    <span class="legend-item"><span class="legend-dot" style="background:#ea580c"></span> Landmark</span>
-                    <span class="legend-item"><span class="legend-dot" style="background:#1d4ed8"></span> Place</span>
-                    <span class="legend-item"><span class="legend-dot" style="background:#a855f7"></span> Your Location</span>
-                    <span class="legend-item"><span class="legend-dot" style="background:#16a34a"></span> Route options</span>
-                </div>
+                <h2>Campus Map</h2>
             </div>
             <div id="map"></div>
         </section>
@@ -719,9 +332,10 @@
             const content = text.toLowerCase();
             if (content.includes('left')) return 'fa-arrow-left';
             if (content.includes('right')) return 'fa-arrow-right';
-            if (content.includes('reached')) return 'fa-flag-checkered';
-            if (content.includes('start')) return 'fa-person-walking';
-            return 'fa-route';
+            if (content.includes('straight')) return 'fa-arrow-up';
+            if (content.includes('reached')) return 'fa-location-dot';
+            if (content.includes('landmark') || content.includes('see')) return 'fa-building';
+            return 'fa-person-walking';
         }
 
         function formatMeters(distance) {
@@ -756,27 +370,34 @@
         function showRoutesState() {
             routesView.classList.remove('hidden');
             detailsView.classList.add('hidden');
+            routesView.style.opacity = '0';
+            setTimeout(() => {
+                routesView.style.transition = 'opacity 0.4s';
+                routesView.style.opacity = '1';
+            }, 10);
             drawRoutes();
         }
 
         function showDetailsState() {
             routesView.classList.add('hidden');
             detailsView.classList.remove('hidden');
+            detailsView.style.opacity = '0';
+            setTimeout(() => {
+                detailsView.style.transition = 'opacity 0.4s';
+                detailsView.style.opacity = '1';
+            }, 10);
             drawRoutes();
         }
 
-        function resetRouteUI(message = 'Routes will appear here after you search.') {
+        function resetRouteUI(message = 'Enter locations to see routes.') {
             currentRoutes = [];
             activeRouteIndex = null;
             routesView.classList.add('hidden');
             detailsView.classList.add('hidden');
             routeChoices.innerHTML = `<div class="empty-state">${message}</div>`;
             steps.innerHTML = `<div class="empty-state">Select a route to see directions.</div>`;
-            document.getElementById('selectedRouteName').textContent = '-';
             document.getElementById('distVal').textContent = '-';
-            document.getElementById('stepCount').textContent = '0 steps';
-            document.getElementById('detailsTitle').textContent = 'Route Details';
-            document.getElementById('stepsCaption').textContent = 'Selected route instructions will appear here.';
+            document.getElementById('stepCountVal').textContent = '0';
             routeGroup?.clearLayers();
             endpointGroup?.clearLayers();
         }
@@ -831,20 +452,20 @@
             const end = selectedRoute.end_marker || selectedRoute.path[selectedRoute.path.length - 1];
 
             L.circleMarker(start, {
-                radius: 9,
+                radius: 7,
                 color: '#ffffff',
                 weight: 3,
-                fillColor: '#111827',
+                fillColor: '#1e293b',
                 fillOpacity: 1
-            }).bindTooltip('Start', { permanent: true, direction: 'right', offset: [12, 0], className: 'map-label' }).addTo(endpointGroup);
+            }).addTo(endpointGroup);
 
             L.circleMarker(end, {
-                radius: 9,
+                radius: 7,
                 color: '#ffffff',
                 weight: 3,
                 fillColor: selectedRoute.color,
                 fillOpacity: 1
-            }).bindTooltip('Destination', { permanent: true, direction: 'right', offset: [12, 0], className: 'map-label landmark-label' }).addTo(endpointGroup);
+            }).addTo(endpointGroup);
         }
 
         function updateLivePath(fullPath, routeColor) {
@@ -893,12 +514,11 @@
                 lineJoin: 'round'
             }).addTo(routeGroup);
             
-            // Snap the purple marker to the path if close
+            // Snap the marker to the path if close
             if (snap.dist < 25) {
                 userMarker?.setLatLng(snapPoint);
             } else {
                 userMarker?.setLatLng(lastUserPos);
-                showOffPathAlert("You are off path.");
             }
         }
 
@@ -955,22 +575,22 @@
         }
 
         function renderSteps(route) {
-            document.getElementById('selectedRouteName').textContent = route.name;
             document.getElementById('distVal').textContent = formatMeters(route.total_dist);
-            document.getElementById('detailsTitle').textContent = `${route.start} to ${route.end}`;
-            document.getElementById('stepsCaption').textContent = `Following ${route.name}.`;
-            document.getElementById('stepCount').textContent = `${route.directions.length} steps`;
+            document.getElementById('stepCountVal').textContent = route.directions.length;
 
             steps.innerHTML = '';
             steps.scrollTop = 0;
             route.directions.forEach((direction, index) => {
                 const card = document.createElement('div');
                 card.className = 'step';
+                card.style.padding = '14px';
+                card.style.borderRadius = '16px';
+                card.style.marginBottom = '8px';
                 card.innerHTML = `
-                    <div class="step-icon"><i class="fa-solid ${routeIconClass(direction)}"></i></div>
+                    <div class="step-icon" style="width: 36px; height: 36px;"><i class="fa-solid ${routeIconClass(direction)}"></i></div>
                     <div>
-                        <small>Step ${index + 1}</small>
-                        <div>${direction}</div>
+                        <small style="font-size: 0.6rem;">Step ${index + 1}</small>
+                        <div style="font-size: 0.88rem; line-height: 1.4;">${direction}</div>
                     </div>
                 `;
                 steps.appendChild(card);
@@ -991,15 +611,17 @@
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = `route-option ${index === activeRouteIndex ? 'active' : ''}`;
+                button.style.padding = '14px';
+                button.style.borderRadius = '18px';
                 button.innerHTML = `
                     <div class="route-meta">
                         <span class="route-swatch" style="background:${route.color}"></span>
                         <div>
-                            <div class="route-title">${route.name}</div>
-                            <div class="route-subtitle">${route.start} to ${route.end}</div>
+                            <div class="route-title" style="font-size: 0.95rem;">${route.name}</div>
+                            <div class="route-subtitle" style="font-size: 0.8rem;">${formatMeters(route.total_dist)}</div>
                         </div>
                     </div>
-                    <span class="badge-chip">${formatMeters(route.total_dist)}</span>
+                    <i class="fa-solid fa-chevron-right" style="color: #cbd5e1;"></i>
                 `;
                 button.addEventListener('click', () => selectRoute(index));
                 routeChoices.appendChild(button);
@@ -1139,8 +761,14 @@
                     
                     startSelect.value = coordVal;
                     geoBtn.classList.remove('loading');
-                    geoBtn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> Use My Location';
+                    geoBtn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> USE MY CURRENT LOCATION';
                     
+                    // Auto-trigger route search if destination is already selected
+                    const endSelect = document.getElementById('end');
+                    if (endSelect.value) {
+                        document.getElementById('routeForm').dispatchEvent(new Event('submit'));
+                    }
+
                     // Start Live Tracking
                     startLiveTracking();
                 },

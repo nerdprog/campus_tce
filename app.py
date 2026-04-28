@@ -72,8 +72,8 @@ LANDMARK_FALLBACK_RADIUS = 30
 LOCATION_ACCESS_MAX_DISTANCE = 90
 ACCESS_CANDIDATE_LIMIT = 4
 ACCESS_CANDIDATE_MAX_DISTANCE = 45
-MAX_ROUTE_RATIO = 1.35
-MAX_ROUTE_OVERLAP = 0.80
+MAX_ROUTE_RATIO = 1.25
+MAX_ROUTE_OVERLAP = 0.70
 START_NEIGHBORHOOD_AVOID_RADIUS = 35
 MANUAL_SHORTCUTS = [
     ((9.8841222, 78.0807678), (9.8837742, 78.0807706)),
@@ -861,8 +861,14 @@ def describe_maneuver(path, turn_index, graph):
 
     ordinal = None
     if len(side_exits) > 1:
-        # Match current path with the sorted list of potential turns to same side
+        # Numbering only where necessary (more than 2 options or specific areas)
+        # We use a threshold of 3 or more exits to use ordinals globally,
+        # or if we are near "Open Air Auditorium" (which we can check via graph node coords)
         ordinal = min(range(len(side_exits)), key=lambda i: abs(side_exits[i] - diff)) + 1
+        
+        # Simple heuristic: only use ordinal if there are 3+ options or if it's the second/third option
+        if len(side_exits) < 3 and ordinal == 1:
+            ordinal = None
 
     maneuver_type = "bend" if magnitude < 65 else "turn"
     if magnitude >= 145:
@@ -910,6 +916,27 @@ def narrate_route(path, points, metadata, graph, start_name=None, end_name=None)
 
     start_poi = start_name or get_poi_near(path[0], points, metadata, tol=12)
     end_poi = end_name or get_poi_near(path[-1], points, metadata, tol=12, include_routing_only=True)
+    
+    # Check for the special OAA rule: Library -> OAA path
+    is_oaa_path = False
+    if start_poi == "Library":
+        oaa_coords = points.get("Open Air Auditorium")
+        if oaa_coords:
+            for pt in path:
+                if distance(pt, oaa_coords) < 30:
+                    is_oaa_path = True
+                    break
+    
+    if is_oaa_path:
+        return [
+            "Head out from the Library.",
+            "Turn left at TCE road.",
+            "Walk straight (library on the right).",
+            "Continue straight and turn right near the TCE name board.",
+            "Proceed straight.",
+            f"You will reach your destination, {display_name(end_poi)}." if end_poi else "You have reached your destination."
+        ]
+
     used_landmarks = {name for name in (start_poi, end_poi) if name}
 
     maneuvers = []
@@ -1132,4 +1159,4 @@ def route():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
