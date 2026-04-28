@@ -910,128 +910,188 @@ def final_leg_instruction(end_name, final_landmark=None, final_side="left", dest
     return f"Continue straight to reach {destination_label}."
 
 
-def narrate_route(path, points, metadata, graph, start_name=None, end_name=None):
-    if not path or len(path) < 2:
-        return ["You are already at your destination."]
-
-    start_poi = start_name or get_poi_near(path[0], points, metadata, tol=12)
-    end_poi = end_name or get_poi_near(path[-1], points, metadata, tol=12, include_routing_only=True)
-    
-    # Check for the special OAA rule: Library -> OAA path
-    is_oaa_path = False
-    if start_poi == "Library":
-        oaa_coords = points.get("Open Air Auditorium")
-        if oaa_coords:
-            for pt in path:
-                if distance(pt, oaa_coords) < 30:
-                    is_oaa_path = True
-                    break
-    
-    if is_oaa_path:
-        return [
-            "Head out from the Library.",
-            "Turn left at TCE road.",
-            "Walk straight (library on the right).",
-            "Continue straight and turn right near the TCE name board.",
-            "Proceed straight.",
-            f"You will reach your destination, {display_name(end_poi)}." if end_poi else "You have reached your destination."
-        ]
-
-    used_landmarks = {name for name in (start_poi, end_poi) if name}
-
+def collect_maneuvers(path, graph):
     maneuvers = []
     previous_maneuver_index = 0
     for idx in range(1, len(path) - 1):
         maneuver = describe_maneuver(path, idx, graph)
         if not maneuver:
             continue
-
-        # Distance since last maneuver or start
         segment_dist = path_distance(path[previous_maneuver_index : idx + 1])
-        
-        # Consolidate maneuvers that are very close to each other
         if segment_dist < 12 and maneuvers:
-            # If the new maneuver is more significant (sharper), replace the previous one
             if maneuver["magnitude"] > maneuvers[-1]["magnitude"]:
                 prev_start = maneuvers[-1]["segment_start_idx"]
                 maneuvers[-1] = maneuver
                 maneuvers[-1]["segment_start_idx"] = prev_start
             continue
-
         maneuver["segment_start_idx"] = previous_maneuver_index
         maneuvers.append(maneuver)
         previous_maneuver_index = idx
+    return maneuvers, previous_maneuver_index
+
+
+def get_library_oaa_override(path, points, graph):
+    library = points.get("Library")
+    name_board = points.get("TCE Name Board")
+    auditorium = points.get("Open Air Auditorium")
+    if not library or not name_board or not auditorium:
+        return None
+
+    maneuvers, _ = collect_maneuvers(path, graph)
+    for maneuver_idx, library_turn in enumerate(maneuvers):
+        if library_turn["direction"] != "left":
+            continue
+
+        name_board_turn = next(
+            (
+                maneuver
+                for maneuver in maneuvers[maneuver_idx + 1 :]
+                if maneuver["direction"] == "right" and distance(path[maneuver["index"]], name_board) < 30
+            ),
+            None,
+        )
+        if not name_board_turn:
+            continue
+
+        library_idx = min(
+            range(library_turn["index"], name_board_turn["index"] + 1),
+            key=lambda idx: distance(path[idx], library),
+        )
+        if distance(path[library_idx], library) >= 30:
+            continue
+
+        auditorium_idx = min(
+            range(library_idx, name_board_turn["index"] + 1),
+            key=lambda idx: distance(path[idx], auditorium),
+        )
+        if distance(path[auditorium_idx], auditorium) >= 40:
+            continue
+
+        return {
+            "turn_left_index": library_turn["index"],
+            "library_index": library_idx,
+            "auditorium_index": auditorium_idx,
+            "name_board_turn_index": name_board_turn["index"],
+            "library_distance": round(path_distance(path[library_turn["index"] : library_idx + 1])),
+            "name_board_distance": round(path_distance(path[library_idx : name_board_turn["index"] + 1])),
+        }
+
+    return None
+
+
+def build_display_path(path, override=None):
+    if not override:
+        return list(path)
+
+    simplified = list(path[: override["turn_left_index"] + 1])
+    pivot_indices = [
+        override["library_index"],
+        override["auditorium_index"],
+        override["name_board_turn_index"],
+    ]
+
+    for idx in pivot_indices:
+        point = path[idx]
+        if point != simplified[-1]:
+            simplified.append(point)
+
+    for point in path[override["name_board_turn_index"] + 1 :]:
+        if point != simplified[-1]:
+            simplified.append(point)
+
+    return simplified
+
+
+def narrate_route(path, points, metadata, graph, start_name=None, end_name=None, route_index=None):
+    if not path or len(path) < 2:
+        return ["You are already at your destination."]
+
+    start_poi = start_name or get_poi_near(path[0], points, metadata, tol=12)
+    end_poi = end_name or get_poi_near(path[-1], points, metadata, tol=12, include_routing_only=True)
+    used_landmarks = {name for name in (start_poi, end_poi) if name}
+
+    override = get_library_oaa_override(path, points, graph)
+    if override:
+        start_label = display_name(start_poi) if start_poi else "your location"
+        initial_distance = round(path_distance(path[: override["turn_left_index"] + 1]))
+        instructions = [f"Head out from {start_label}"]
+        if initial_distance > 3:
+            instructions.append(f"Walk straight for {initial_distance} meters")
+        instructions.append("Turn left")
+        instructions.append(
+            f"Walk straight for {override['library_distance']} meters and you will see the Library on your right"
+        )
+        instructions.append(f"Continue straight for {override['name_board_distance']} meters")
+        instructions.append("Take the right near the TCE Name Board")
+        instructions.append("Continue straight")
+
+        remaining = narrate_route_segment(
+            path[override["name_board_turn_index"] :],
+            points,
+            metadata,
+            graph,
+            start_name=None,
+            end_name=end_poi,
+            used_landmarks=used_landmarks,
+        )
+        if remaining and "head out" in remaining[0].lower():
+            remaining.pop(0)
+
+        instructions.extend(remaining)
+        return normalize_instructions(instructions)
+
+    # Standard Narration
+    instructions = narrate_route_segment(path, points, metadata, graph, start_name=start_poi, end_name=end_poi, used_landmarks=used_landmarks)
+    return normalize_instructions(instructions)
+
+
+def narrate_route_segment(path, points, metadata, graph, start_name=None, end_name=None, used_landmarks=None):
+    if len(path) < 2: return []
+    if used_landmarks is None: used_landmarks = set()
+    
+    start_poi = start_name
+    end_poi = end_name
+    
+    maneuvers, previous_maneuver_index = collect_maneuvers(path, graph)
 
     start_label = display_name(start_poi) if start_poi else "your location"
-    instructions = [f"Head out from {start_label}."]
+    instructions = [f"Head out from {start_label}"]
 
     for maneuver in maneuvers:
         turn_index = maneuver["index"]
         leg_start_idx = maneuver["segment_start_idx"]
-        
-        # 1. Look for landmark in this segment
         l_info = landmark_before_turn(path, turn_index, points, metadata, used_landmarks, destination_name=end_poi)
         if not l_info:
             l_info = fallback_landmark_near_segment(path, leg_start_idx, turn_index, points, metadata, used_landmarks, destination_name=end_poi)
 
         if l_info:
             used_landmarks.add(l_info["name"])
-            # Distance from current position to landmark
-            dist_to_landmark = path_distance(path[leg_start_idx : l_info["index"] + 1])
-            dist_on_seg = distance(path[l_info["index"]], path[l_info["index"] + 1]) * l_info["t"]
-            total_to_landmark = round(dist_to_landmark + dist_on_seg)
-            
-            # Distance from landmark to turn
-            dist_from_landmark_on_seg = distance(path[l_info["index"]], path[l_info["index"] + 1]) * (1 - l_info["t"])
-            dist_rest_to_turn = path_distance(path[l_info["index"] + 1 : turn_index + 1])
-            total_from_landmark = round(dist_from_landmark_on_seg + dist_rest_to_turn)
-
-            if total_to_landmark > 3:
-                instructions.append(f"Walk straight for {total_to_landmark} meters.")
-            
-            instructions.append(f"You will see {display_name(l_info['name'])} on your {l_info['side']}.")
-            
-            if total_from_landmark > 5:
-                instructions.append(f"Continue straight for {total_from_landmark} meters.")
-            
-            instructions.append(f"Then {maneuver['action']}.")
+            dist_to_landmark = round(path_distance(path[leg_start_idx : l_info["index"] + 1]))
+            dist_from_landmark = round(path_distance(path[l_info["index"] : turn_index + 1]))
+            if dist_to_landmark > 3:
+                instructions.append(f"Walk straight for {dist_to_landmark} meters")
+            instructions.append(f"You will see {display_name(l_info['name'])} on your {l_info['side']}")
+            if dist_from_landmark > 5:
+                instructions.append(f"Continue straight for {dist_from_landmark} meters")
+            instructions.append(f"{maneuver['action']}")
         else:
-            # No landmark found, just give distance and action
             dist_to_turn = round(path_distance(path[leg_start_idx : turn_index + 1]))
             if dist_to_turn > 3:
-                instructions.append(f"Walk straight for {dist_to_turn} meters.")
-            instructions.append(f"Then {maneuver['action']}.")
+                instructions.append(f"Walk straight for {dist_to_turn} meters")
+            instructions.append(f"{maneuver['action']}")
 
     # Final Leg
-    final_l_info = landmark_on_final_leg(path, previous_maneuver_index, points, metadata, used_landmarks, destination_name=end_poi)
-    if not final_l_info:
-        final_l_info = fallback_landmark_near_segment(path, previous_maneuver_index, len(path) - 1, points, metadata, used_landmarks, destination_name=end_poi)
-
-    if final_l_info:
-        dist_to_landmark = path_distance(path[previous_maneuver_index : final_l_info["index"] + 1])
-        dist_on_seg = distance(path[final_l_info["index"]], path[final_l_info["index"] + 1]) * final_l_info["t"]
-        total_to_landmark = round(dist_to_landmark + dist_on_seg)
-        
-        dist_from_landmark_on_seg = distance(path[final_l_info["index"]], path[final_l_info["index"] + 1]) * (1 - final_l_info["t"])
-        dist_rest_to_end = path_distance(path[final_l_info["index"] + 1 :])
-        total_from_landmark = round(dist_from_landmark_on_seg + dist_rest_to_end)
-
-        if total_to_landmark > 3:
-            instructions.append(f"Walk straight for {total_to_landmark} meters.")
-        
-        instructions.append(f"Pass {display_name(final_l_info['name'])} on your {final_l_info['side']}.")
-        
-        if total_from_landmark > 3:
-            instructions.append(f"Continue straight for {total_from_landmark} meters.")
-    else:
-        dist_to_end = round(path_distance(path[previous_maneuver_index:]))
-        if dist_to_end > 3:
-            instructions.append(f"Continue straight for {dist_to_end} meters.")
+    dist_to_end = round(path_distance(path[previous_maneuver_index:]))
+    if dist_to_end > 3:
+        instructions.append(f"Continue straight for {dist_to_end} meters")
 
     if end_poi:
-        instructions.append(f"You will reach your destination, {display_name(end_poi)}.")
+        instructions.append(f"You will reach your destination, {display_name(end_poi)}")
     
-    # Final cleanup and normalization
+    return instructions
+
+
+def normalize_instructions(instructions):
     cleaned = []
     for text in instructions:
         if not text: continue
@@ -1041,17 +1101,17 @@ def narrate_route(path, points, metadata, graph, start_name=None, end_name=None)
             normalized += "."
         if not cleaned or cleaned[-1] != normalized:
             cleaned.append(normalized)
-            
     if not cleaned or "reached your destination" not in cleaned[-1].lower():
         cleaned.append("You have reached your destination.")
-        
     return cleaned
 
 
 def serialize_route(path, points, metadata, graph, route_index, start_name, end_name, start_anchor=None, end_anchor=None):
-    display_path = list(path)
-    start_marker = list(start_anchor) if start_anchor else list(display_path[0])
-    end_marker = list(end_anchor) if end_anchor else list(display_path[-1])
+    override = get_library_oaa_override(path, points, graph)
+    display_path = build_display_path(path, override=override)
+    # Snap markers to the actual path nodes (on the road) instead of the POI anchors
+    start_marker = list(display_path[0])
+    end_marker = list(display_path[-1])
 
     return {
         "id": route_index,
@@ -1060,8 +1120,16 @@ def serialize_route(path, points, metadata, graph, route_index, start_name, end_
         "path": [[lat, lon] for lat, lon in display_path],
         "start_marker": start_marker,
         "end_marker": end_marker,
-        "total_dist": round(path_distance(display_path), 1),
-        "directions": narrate_route(display_path, points, metadata, graph, start_name=start_name, end_name=end_name),
+        "total_dist": round(path_distance(path), 1),
+        "directions": narrate_route(
+            path,
+            points,
+            metadata,
+            graph,
+            start_name=start_name,
+            end_name=end_name,
+            route_index=route_index,
+        ),
     }
 
 
